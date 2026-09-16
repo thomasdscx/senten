@@ -1,0 +1,9 @@
+import { defineSentenExtension } from '../../../packages/extension-sdk/src/index.js';
+export const reactAdapter = defineSentenExtension({
+  name:'Senten React Adapter',namespace:'react',version:'0.2.0-alpha.0',kind:'adapter',senten:'>=0.2.0-alpha.0',capabilities:['source.read','semantic.write'],
+  semanticTypes:['component','hook','context','effect'],detectors:['react.components','react.hooks','react.client-boundaries'],hooks:['onDiscover','onSemanticGraph','onClickthru'],skills:['react-component','react-testing','react-accessibility'],
+  sourceAnalyzers:[{name:'react.source',analyze({path,content}){const hooks=[...new Set([...content.matchAll(/\b(useState|useReducer|useEffect|useMemo|useCallback|useContext|useRef)\s*\(/g)].map(m=>m[1]!).filter(Boolean))];const isReact=/\.(tsx|jsx)$/.test(path)&&(content.includes('react')||/<[A-Za-z]/.test(content));if(!isReact)return{};const fileId=`file:${path}`;const nodes=hooks.map(h=>({id:`state:react/${h}@${path}`,kind:'state' as const,label:h,source:path,metadata:{framework:'react',discoveredBy:'extension:react'}}));const edges=nodes.map(n=>({from:fileId,to:n.id,relation:'uses-hook',metadata:{discoveredBy:'extension:react'}}));return{nodes,edges,frameworkHints:['react']};}}],
+  elementTypes:[{name:'component',creatable:true,mutable:true},{name:'hook',creatable:true,mutable:true}],
+  templates:[{name:'basic',kind:'template',description:'React application starter registration; package-backed generators can be supplied by the adapter/registry.'},{name:'dashboard',kind:'blueprint',description:'Semantic dashboard blueprint registration.'}],
+  commands:[{path:'inspect',description:'Inspect registered React semantics.',run(){console.log('React adapter active. Semantic registrations: component, hook, context, effect.');}},{path:'templates',description:'List templates/blueprints registered by the React adapter.',run(){console.log('react/basic      template\nreact/dashboard  blueprint');}}]
+});

@@ -1,0 +1,29 @@
+name: Publish npm alpha
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: npm dist-tag
+        required: true
+        default: alpha
+        type: choice
+        options: [alpha, beta, latest]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    environment: npm-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm install --ignore-scripts
+      - run: npm run release:verify
+      - run: npm publish --provenance --access public --tag "${{ inputs.tag }}"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

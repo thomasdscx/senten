@@ -1,0 +1,70 @@
+{
+  "name": "senten",
+  "version": "0.11.1-alpha.0",
+  "private": false,
+  "description": "Semantic application architecture for secure, explainable, cross-platform living software.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "senten": "./bin/senten.mjs"
+  },
+  "workspaces": [
+    "packages/*",
+    "adapters/*",
+    "integrations/*"
+  ],
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --test-concurrency=1 dist/tests/*.test.js",
+    "senten": "node bin/senten.mjs",
+    "preflight": "npm run clean && npm run typecheck && npm run build && npm test",
+    "prepack": "npm run clean && npm run build",
+    "pack:dry-run": "npm pack --dry-run --ignore-scripts",
+    "release:verify": "npm run preflight && npm run pack:dry-run",
+    "release:artifacts": "node scripts/release-artifacts.mjs"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30"
+  },
+  "packageManager": "npm@10.9.2",
+  "files": [
+    "bin/",
+    "dist/packages/",
+    "dist/adapters/",
+    "dist/integrations/",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "developer-tools",
+    "architecture",
+    "cli",
+    "semantic-analysis",
+    "ai-agents",
+    "software-assurance",
+    "sandbox",
+    "testing"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thomasdscx/senten.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thomasdscx/senten/issues"
+  },
+  "homepage": "https://github.com/thomasdscx/senten#readme",
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
+  "dependencies": {
+    "typescript": "5.8.3"
+  }
+}

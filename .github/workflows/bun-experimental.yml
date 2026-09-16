@@ -1,0 +1,22 @@
+name: Bun experimental compatibility
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bun-experimental:
+    name: Ubuntu / Bun (experimental)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --ignore-scripts
+      - run: bun run typecheck
+      - run: bun run build
+      - run: bun bin/senten.mjs --version
+      - run: bun bin/senten.mjs --help

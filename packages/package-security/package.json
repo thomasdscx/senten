@@ -1,0 +1,6 @@
+{
+  "name": "@senten/package-security",
+  "version": "0.11.1-alpha.0",
+  "type": "module",
+  "private": true
+}

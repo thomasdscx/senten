@@ -1,0 +1,32 @@
+name: Release artifacts
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --ignore-scripts
+      - run: npm run release:verify
+      - run: npm run release:artifacts
+      - name: Generate SBOM
+        run: npm sbom --sbom-format cyclonedx > release/sbom.cdx.json
+      - name: Add SBOM checksum
+        run: sha256sum release/sbom.cdx.json >> release/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: senten-${{ github.ref_name }}
+          path: release/*
+      - name: Create GitHub prerelease
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${GITHUB_REF_NAME}" release/* --generate-notes --prerelease
