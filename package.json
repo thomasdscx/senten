@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "senten": "./bin/senten.mjs"
+    "senten": "bin/senten.mjs"
   },
   "workspaces": [
     "packages/*",
