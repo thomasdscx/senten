@@ -7,6 +7,42 @@ Senten is a framework-agnostic semantic application architecture framework for b
 Senten does **not** replace React, Vue, Next.js, Expo, Tauri, Git, PostgreSQL, Supabase, or other tools. It gives them a shared semantic layer: StateTruss, Universal Elements, policies, invariants, capabilities, evidence, safe operations, scoped memory, templates/blueprints, registries, sandboxing, interaction assurance, and machine-readable context.
 
 
+
+## Existing-app adoption and living architecture
+
+Adopt an existing project without executing repository code:
+
+```bash
+senten adopt
+senten why route:/api/projects
+```
+
+Declare architecture that cannot be inferred safely from source alone:
+
+```bash
+senten declare resource invoice
+senten declare action invoice.create
+senten relate action:invoice.create writes resource:invoice
+```
+
+Provider-neutral capability configuration and operational budgets:
+
+```bash
+senten capability register ai local-ollama --priority 100
+senten capability budget ai --latency-ms 5000 --tokens 12000
+senten capability check ai --latency-ms 900 --tokens 2500
+```
+
+Project-scoped Git context can be bound without storing Git credentials:
+
+```bash
+senten git bind ThomasDSCX --remote origin --permission read --permission commit
+senten git context
+senten git doctor
+```
+
+See `docs/SENTEN_BUILDS_12_20.md` for the cumulative sprint map and implemented boundaries.
+
 ## Source Intelligence
 
 Build 2 lets Senten learn an existing TypeScript/JavaScript application without executing it:
@@ -41,7 +77,11 @@ Use `workflow remove`, `workflow move`, or `workflow clear` to safely reshape a 
 
 ## Current status
 
-`0.11.0-alpha.0` is the Distribution & Release Engineering alpha. It adds cross-platform CI, npm packaging, an official Docker image definition, release artifacts/checksums/SBOMs, signed container publishing, and explicit alpha/beta/stable channels while preserving the Build 10.2 CLI hardening.
+`1.0.0-rc.1` is the first release-candidate line. It adds real-application dogfood fixtures, richer Next.js/Supabase semantics, explainable blast-radius intelligence, adversarial MCP scope hardening, monorepo adoption coverage, RC protocol markers, and release-candidate distribution gates.
+
+Earlier `0.21.x` builds established versioned Application IR fragments, first-party Next.js/Expo/Tauri adapters, fail-closed mutation effect boundaries, and the read-only-by-default MCP stdio transport.
+
+`0.20.0-alpha.0` was the cumulative Builds 12–20 capability sprint. It keeps the proven distribution/release foundation and deepens existing-app adoption, explicit StateTruss contracts, provider-neutral capabilities/budgets, project-scoped Git context, safe failure simulation, Observatory adoption intelligence, and compatibility reporting. The v1 public contracts are intentionally not frozen yet.
 
 Implemented now includes:
 
@@ -68,7 +108,7 @@ Implemented now includes:
 - Senten Assurance Exchange v0.1 and native LaunchProof verification interchange
 - first-class Assurance Cases with trusted independent verification provenance
 
-Architecturally committed and staged for later builds: responsive/device matrices, native mobile/desktop interaction drivers, richer interactive Observatory graph/timelines, native PDF renderer, full MCP/A2A transports, OpenTelemetry/runtime collectors, and v1 security/performance/release hardening.
+Architecturally committed beyond RC1: native mobile/desktop interaction drivers, richer interactive Observatory graph/timelines, native PDF rendering, A2A transport, broader OpenTelemetry/runtime collectors, deeper framework adapters, and continued security/performance hardening.
 
 ## Interaction Assurance
 
@@ -192,22 +232,22 @@ npm run preflight
 npm link
 ```
 
-The public-alpha distribution is prepared for:
+The release-candidate distribution is prepared for:
 
 ```bash
 # project-local / CI
-npm install -D senten@alpha
+npm install -D senten@rc
 npx senten --version
 
 # global workstation CLI
-npm install -g senten@alpha
+npm install -g senten@rc
 senten --version
 ```
 
 Docker releases are designed for GHCR:
 
 ```text
-ghcr.io/thomasdscx/senten:alpha
+ghcr.io/thomasdscx/senten:rc
 ```
 
 See `docs/SENTEN_DISTRIBUTION_v0.1.md` for Windows CMD, PowerShell, macOS/Linux, Docker and release-channel details.
@@ -465,6 +505,7 @@ senten sandbox providers
 senten sandbox create
 senten sandbox create --provider docker --network deny --ttl 2h
 senten sandbox run <id> -- npm test
+senten sandbox run <id> --include-actions -- npm test
 senten sandbox snapshot <id> before-migration
 senten sandbox restore <id> <snapshot-id>
 senten sandbox reproduce <run-id>
@@ -473,6 +514,8 @@ senten sandbox destroy <id>
 ```
 
 The default `local` provider is a sanitized workspace copy intended for reproducibility and safe iteration. It intentionally refuses to claim enforceable network denial. Use the optional Docker provider for container isolation, `--network none`, and CPU/memory/PID limits when executing untrusted code.
+
+Build 21 adds an explicit effect firewall for mutation-capable sandbox runs. `--include-actions` fails closed unless the sandbox has Docker network denial, or the operator separately opts into `--allow-live-effects`. The latter is an explicit unsafe/live-effects override, not a containment claim, and is recorded in the sandbox run ledger.
 
 Repository `.env*`, `.git`, `.senten`, common credential/private-key files, dependency folders and build output are excluded from sandbox copies. Synthetic secrets can be provisioned explicitly with `--synthetic-secret NAME`.
 
@@ -489,7 +532,12 @@ senten agent run codex --task "inspect architecture" -- inspect
 senten agent history codex
 senten commands --format json
 senten mcp schema
+senten mcp serve
+senten mcp serve --allow-write
 ```
+
+The MCP stdio server is read-only by default. Mutating tools require `--allow-write`; commands requesting live external effects require the additional `--allow-live-effects` server gate. Tool execution is shell-free, bounded by timeout/output limits, and receives a sanitized environment rather than inheriting arbitrary process secrets.
+
 
 
 ## Extension ecosystem hardening (Build 8)
@@ -520,13 +568,13 @@ Before publishing or cutting a release candidate, run:
 ```bash
 npm run preflight
 senten doctor --strict
-senten release check --strict
+senten release check --rc --strict
 senten benchmark --iterations 20
 ```
 
-Senten remains pre-1.0; Build 10 hardens the project for public inspection without claiming final API stability.
+Senten is now on the `1.0.0-rc.1` line. RC protocol markers are candidate-frozen for compatibility testing; stable `1.0.0` remains gated on cross-platform CI, public-package verification, broader dogfooding, and release evidence.
 
 
 ## Runtime support
 
-Node.js 22.5+ is the canonical Senten runtime for the alpha. Bun is an experimental compatibility target. Docker distributions include their own runtime. See `docs/RUNTIME_SUPPORT.md`.
+Node.js 22.5+ is the canonical Senten runtime for RC1. Bun is an experimental compatibility target. Docker distributions include their own runtime. See `docs/RUNTIME_SUPPORT.md`.

@@ -4,7 +4,8 @@ import { constants } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { extname, join, relative, posix } from 'node:path';
 import type { ApplicationIR, SemanticEdge, SemanticNode } from '../../core/src/index.js';
-import type { ExtensionSourceAnalyzer } from '../../extension-sdk/src/index.js';
+import type { ApplicationIRFragment, ExtensionSourceAnalyzer } from '../../extension-sdk/src/index.js';
+import { mergeApplicationIRFragments } from '../../semantic/src/index.js';
 
 const PARSER_VERSION = 'senten-source-v1';
 const SOURCE_EXTENSIONS = new Set(['.ts','.tsx','.js','.jsx','.mts','.cts','.mjs','.cjs']);
@@ -37,6 +38,7 @@ export interface ParsedSourceFile {
 export interface DiscoveryStats { files: number; parsed: number; cacheHits: number; cacheMisses: number; nodes: number; edges: number; durationMs: number; }
 export interface DiscoveryResult { ir: ApplicationIR; files: ParsedSourceFile[]; stats: DiscoveryStats; frameworks: string[]; }
 export interface SemanticDiff { addedNodes: SemanticNode[]; removedNodes: SemanticNode[]; changedNodes: { before: SemanticNode; after: SemanticNode }[]; addedEdges: SemanticEdge[]; removedEdges: SemanticEdge[]; breaking: string[]; }
+export interface ArchitectureManifest { schemaVersion:'0.1'; nodes:SemanticNode[]; edges:SemanticEdge[]; metadata?:Record<string,unknown>; }
 
 function hash(data:string|Buffer):string{return createHash('sha256').update(data).digest('hex');}
 async function exists(path:string):Promise<boolean>{try{await access(path,constants.F_OK);return true;}catch{return false;}}
@@ -45,27 +47,61 @@ function idSafe(input:string):string{return input.replace(/[^A-Za-z0-9_.\-/]+/g,
 
 export async function discoverSourceProject(cwd:string, application:ApplicationIR['application'], existing?:ApplicationIR, options:{force?:boolean; analyzers?:{namespace:string;analyzer:ExtensionSourceAnalyzer}[]}={}):Promise<DiscoveryResult>{
   const started=Date.now(); const cacheRoot=join(cwd,'.senten','cache','source'); await mkdir(join(cacheRoot,'objects'),{recursive:true});
-  const paths=await collectSourceFiles(cwd); const files:ParsedSourceFile[]=[]; const extensionNodes:SemanticNode[]=[]; const extensionEdges:SemanticEdge[]=[]; const extensionFrameworks=new Set<string>(); let hits=0,misses=0,parsed=0;
+  const projectFrameworks=await detectProjectFrameworks(cwd); const paths=await collectSourceFiles(cwd,await loadSentenIgnore(cwd)); const files:ParsedSourceFile[]=[]; const extensionNodes:SemanticNode[]=[]; const extensionEdges:SemanticEdge[]=[]; const extensionFragments:ApplicationIRFragment[]=[]; const extensionFrameworks=new Set<string>(); let hits=0,misses=0,parsed=0;
   for(const abs of paths){const content=await readFile(abs,'utf8');const rel=norm(relative(cwd,abs));const digest=hash(`${PARSER_VERSION}\0${content}`);const cachePath=join(cacheRoot,'objects',`${digest}.json`);
     let result:ParsedSourceFile;
     if(!options.force&&await exists(cachePath)){const cached=JSON.parse(await readFile(cachePath,'utf8')) as ParsedSourceFile;result={...cached,path:rel,hash:digest};hits++;}
     else{result=parseSource(rel,content,digest);await writeFile(cachePath,JSON.stringify(result));misses++;parsed++;}
     files.push(result);
-    for(const registration of options.analyzers??[]){const contribution=await registration.analyzer.analyze({path:rel,content,language:result.language,imports:result.imports.map(i=>i.specifier),exports:result.exports});for(const node of contribution.nodes??[])extensionNodes.push({...node,metadata:{discoveredBy:`extension:${registration.namespace}`,...node.metadata}});for(const edge of contribution.edges??[])extensionEdges.push({...edge,metadata:{discoveredBy:`extension:${registration.namespace}`,...edge.metadata}});for(const hint of contribution.frameworkHints??[])extensionFrameworks.add(hint);}
+    for(const registration of options.analyzers??[]){const contribution=await registration.analyzer.analyze({path:rel,content,language:result.language,imports:result.imports.map(i=>i.specifier),exports:result.exports,projectFrameworks});for(const node of contribution.nodes??[])extensionNodes.push({...node,metadata:{discoveredBy:`extension:${registration.namespace}`,...node.metadata}});for(const edge of contribution.edges??[])extensionEdges.push({...edge,metadata:{discoveredBy:`extension:${registration.namespace}`,...edge.metadata}});if(contribution.fragment)extensionFragments.push({...contribution.fragment,source:{...contribution.fragment.source,adapter:contribution.fragment.source.adapter||registration.namespace,analyzer:contribution.fragment.source.analyzer??registration.analyzer.name,files:[...new Set([...(contribution.fragment.source.files??[]),rel])]}});for(const hint of [...(contribution.frameworkHints??[]),...(contribution.fragment?.frameworkHints??[])])extensionFrameworks.add(hint);}
   }
-  const graph=buildGraph(application,files); graph.nodes.push(...extensionNodes); graph.edges.push(...extensionEdges); graph.nodes=dedupeNodes(graph.nodes); graph.edges=dedupeEdges(graph.edges);
+  const graph=buildGraph(application,files); graph.nodes.push(...extensionNodes); graph.edges.push(...extensionEdges);
+  const manifest=await loadArchitectureManifest(cwd);
+  if(manifest){for(const node of manifest.nodes)graph.nodes.push({...node,metadata:{declaredBy:'architecture-manifest',...node.metadata}});for(const edge of manifest.edges)graph.edges.push({...edge,metadata:{declaredBy:'architecture-manifest',...edge.metadata}});}
+  graph.nodes=dedupeNodes(graph.nodes); graph.edges=dedupeEdges(graph.edges);
   const retained=(existing?.nodes??[]).filter(n=>n.metadata?.discoveredBy!=='source-intelligence'&&n.kind!=='application');
   const retainedEdges=(existing?.edges??[]).filter(e=>e.metadata?.discoveredBy!=='source-intelligence');
   const applicationNode:SemanticNode={id:`application:${application.id}`,kind:'application',label:application.name,metadata:{source:'senten'}};
   const nodeMap=new Map<string,SemanticNode>([[applicationNode.id,applicationNode],...retained.map(n=>[n.id,n] as const),...graph.nodes.map(n=>[n.id,n] as const)]);
   const edgeMap=new Map<string,SemanticEdge>();for(const e of [...retainedEdges,...graph.edges])edgeMap.set(`${e.from}\0${e.relation}\0${e.to}`,e);
-  const ir:ApplicationIR={schemaVersion:'0.1',application,nodes:[...nodeMap.values()],edges:[...edgeMap.values()],generatedAt:new Date().toISOString()};
-  const frameworks=[...new Set([...files.flatMap(f=>f.frameworkHints),...extensionFrameworks])].sort();
-  const manifest={parserVersion:PARSER_VERSION,generatedAt:ir.generatedAt,files:files.map(f=>({path:f.path,hash:f.hash})),frameworks};await writeFile(join(cacheRoot,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');
+  let ir:ApplicationIR={schemaVersion:'0.1',application,nodes:[...nodeMap.values()],edges:[...edgeMap.values()],generatedAt:new Date().toISOString()}; if(extensionFragments.length){ir=mergeApplicationIRFragments(ir,extensionFragments).ir;}
+  const frameworks=[...new Set([...projectFrameworks,...files.flatMap(f=>f.frameworkHints),...extensionFrameworks])].sort();
+  const cacheManifest={parserVersion:PARSER_VERSION,generatedAt:ir.generatedAt,files:files.map(f=>({path:f.path,hash:f.hash})),frameworks};await writeFile(join(cacheRoot,'manifest.json'),JSON.stringify(cacheManifest,null,2)+'\n');
   return{ir,files,frameworks,stats:{files:files.length,parsed,cacheHits:hits,cacheMisses:misses,nodes:graph.nodes.length,edges:graph.edges.length,durationMs:Date.now()-started}};
 }
 
-async function collectSourceFiles(root:string):Promise<string[]>{const out:string[]=[];async function walk(dir:string){for(const entry of await readdir(dir,{withFileTypes:true})){if(entry.isDirectory()&&DEFAULT_IGNORES.has(entry.name))continue;const p=join(dir,entry.name);if(entry.isDirectory())await walk(p);else if(entry.isFile()&&SOURCE_EXTENSIONS.has(extname(entry.name).toLowerCase()))out.push(p);}}await walk(root);return out.sort();}
+
+async function loadArchitectureManifest(root:string):Promise<ArchitectureManifest|undefined>{
+  const path=join(root,'senten.architecture.json');
+  if(!await exists(path))return undefined;
+  const parsed=JSON.parse(await readFile(path,'utf8')) as ArchitectureManifest;
+  if(parsed.schemaVersion!=='0.1')throw new Error(`Unsupported senten.architecture.json schema: ${String((parsed as any).schemaVersion)}`);
+  if(!Array.isArray(parsed.nodes)||!Array.isArray(parsed.edges))throw new Error('Invalid senten.architecture.json: nodes and edges arrays are required.');
+  const ids=new Set(parsed.nodes.map(n=>n.id));
+  for(const node of parsed.nodes)if(!node?.id||!node?.kind)throw new Error('Invalid senten.architecture.json: every node requires id and kind.');
+  for(const edge of parsed.edges){if(!edge?.from||!edge?.to||!edge?.relation)throw new Error('Invalid senten.architecture.json: every edge requires from, to, relation.');if(!ids.has(edge.from)&&!edge.from.startsWith('application:'))throw new Error(`Architecture manifest edge references undeclared source: ${edge.from}`);if(!ids.has(edge.to)&&!edge.to.startsWith('application:'))throw new Error(`Architecture manifest edge references undeclared target: ${edge.to}`);}
+  return parsed;
+}
+
+
+async function detectProjectFrameworks(root:string):Promise<string[]>{
+  try{
+    const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8')) as {dependencies?:Record<string,string>;devDependencies?:Record<string,string>};
+    const deps={...(pkg.dependencies??{}),...(pkg.devDependencies??{})};const out=new Set<string>();
+    if(deps.react)out.add('react');
+    if(deps.next)out.add('next');
+    if(deps.expo||deps['expo-router'])out.add('expo');
+    if(deps['@tauri-apps/api']||deps['@tauri-apps/cli'])out.add('tauri');
+    if(deps.vue)out.add('vue');
+    if(deps['@angular/core'])out.add('angular');
+    if(deps['@supabase/supabase-js'])out.add('supabase');
+    return [...out].sort();
+  }catch{return [];}
+}
+
+async function loadSentenIgnore(root:string):Promise<string[]>{try{return (await readFile(join(root,'.sentenignore'),'utf8')).split(/\r?\n/).map(x=>norm(x.trim()).replace(/^\.\//,'').replace(/\*\*?$/,'').replace(/\/$/,'')).filter(x=>x&&!x.startsWith('#'));}catch{return [];}}
+function ignoredRelative(path:string,ignores:string[]):boolean{const p=norm(path);return ignores.some(prefix=>p===prefix||p.startsWith(prefix+'/'));}
+async function collectSourceFiles(root:string,ignorePrefixes:string[]=[]):Promise<string[]>{const out:string[]=[];async function walk(dir:string){for(const entry of await readdir(dir,{withFileTypes:true})){if(entry.isDirectory()&&DEFAULT_IGNORES.has(entry.name))continue;const p=join(dir,entry.name);const rel=norm(relative(root,p));if(ignoredRelative(rel,ignorePrefixes))continue;if(entry.isDirectory())await walk(p);else if(entry.isFile()&&SOURCE_EXTENSIONS.has(extname(entry.name).toLowerCase()))out.push(p);}}await walk(root);return out.sort();}
 
 function parseSource(path:string,content:string,digest:string):ParsedSourceFile{
   const ext=extname(path);const scriptKind=ext==='.tsx'?ts.ScriptKind.TSX:ext==='.jsx'?ts.ScriptKind.JSX:ext==='.js'||ext==='.mjs'||ext==='.cjs'?ts.ScriptKind.JS:ts.ScriptKind.TS;

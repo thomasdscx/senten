@@ -1,0 +1,1 @@
+{"schemaVersion":"0.1","nodes":[{"id":"policy:native.invoke","kind":"policy"},{"id":"invariant:native.invoke-bounded","kind":"invariant"}],"edges":[{"from":"invariant:native.invoke-bounded","to":"policy:native.invoke","relation":"enforced-by"}]}

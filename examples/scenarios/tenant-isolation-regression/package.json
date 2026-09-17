@@ -1,0 +1,1 @@
+{"name":"tenant-isolation-regression","private":true,"scripts":{"test":"node --test"},"dependencies":{"next":"16.0.0","react":"19.0.0","@supabase/supabase-js":"2.0.0"}}

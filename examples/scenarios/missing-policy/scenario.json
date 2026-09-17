@@ -1,0 +1,1 @@
+{"id":"missing-policy","title":"Missing authorization policy","description":"Externally reachable mutation route without a modeled policy.","application":{"id":"missing-policy","name":"Missing Policy"},"expectations":{"frameworks":["next"],"requiredNodeIds":["route:/api/invoices/delete","invariant:tenant.isolation"],"gapIds":["security.routes-without-policy"],"readinessMax":50}}

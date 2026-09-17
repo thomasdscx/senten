@@ -1,0 +1,407 @@
+{
+  "schemaVersion": "0.1",
+  "generatedAt": "2026-09-16T21:38:11.254Z",
+  "scenario": {
+    "id": "tenant-isolation-regression",
+    "title": "Tenant isolation regression",
+    "description": "A tenant-sensitive delete route with no explicit authorization policy.",
+    "application": {
+      "id": "tenant-regression",
+      "name": "Tenant Regression"
+    },
+    "expectations": {
+      "frameworks": [
+        "next",
+        "supabase"
+      ],
+      "requiredNodeIds": [
+        "route:/api/projects/delete",
+        "invariant:tenant.isolation",
+        "resource:projects"
+      ],
+      "gapIds": [
+        "security.routes-without-policy"
+      ]
+    }
+  },
+  "frameworks": [
+    "next",
+    "react",
+    "supabase"
+  ],
+  "passed": true,
+  "failures": [],
+  "adoption": {
+    "generatedAt": "2026-09-16T21:38:11.254Z",
+    "application": {
+      "id": "tenant-regression",
+      "name": "Tenant Regression"
+    },
+    "summary": {
+      "files": 1,
+      "routes": 1,
+      "actions": 2,
+      "resources": 1,
+      "providers": 2,
+      "tests": 0
+    },
+    "signals": [
+      {
+        "id": "framework.next",
+        "category": "framework",
+        "label": "Next.js",
+        "evidence": [
+          "package:next@16.0.0"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "framework.react",
+        "category": "framework",
+        "label": "React",
+        "evidence": [
+          "package:react@19.0.0"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "framework.@supabase/supabase-js",
+        "category": "framework",
+        "label": "Supabase",
+        "evidence": [
+          "package:@supabase/supabase-js@2.0.0"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "routes.discovered",
+        "category": "route",
+        "label": "1 application routes",
+        "evidence": [
+          "route:/api/projects/delete"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "risk.no-policy-model",
+        "category": "risk",
+        "label": "Routes exist but no explicit Senten policy nodes are declared",
+        "evidence": [
+          "route:/api/projects/delete"
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "gaps": [
+      {
+        "id": "security.routes-without-policy",
+        "severity": "critical",
+        "category": "security",
+        "message": "Externally reachable routes are present but no explicit policy nodes are modeled.",
+        "evidence": [
+          "route:/api/projects/delete"
+        ]
+      },
+      {
+        "id": "testing.no-linked-tests",
+        "severity": "warning",
+        "category": "testing",
+        "message": "No tests are represented in the semantic graph.",
+        "evidence": []
+      },
+      {
+        "id": "operations.no-ci",
+        "severity": "warning",
+        "category": "operations",
+        "message": "No GitHub Actions workflows were detected.",
+        "evidence": []
+      }
+    ],
+    "recommendations": [
+      "Declare authorization/security policies for privileged actions and routes.",
+      "Connect test files to guarantees and critical routes/actions.",
+      "Add a deterministic pre-release workflow and CI integration."
+    ],
+    "coverage": {
+      "semantic": 67,
+      "operational": 25
+    },
+    "readiness": {
+      "status": "early",
+      "score": 1
+    },
+    "workspace": {
+      "kind": "single-package"
+    }
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "application:tenant-regression",
+        "kind": "application",
+        "label": "Tenant Regression",
+        "metadata": {
+          "source": "senten"
+        }
+      },
+      {
+        "id": "file:app/api/projects/delete/route.ts",
+        "kind": "file",
+        "label": "app/api/projects/delete/route.ts",
+        "source": "app/api/projects/delete/route.ts",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "hash": "505fa9c5e50ea0592ce14f917f83d37ca364fcfc7e3519f39bbbfb5f8de9fe87",
+          "language": "typescript",
+          "loc": 3,
+          "test": false,
+          "frameworks": [
+            "supabase"
+          ]
+        }
+      },
+      {
+        "id": "route:/api/projects/delete",
+        "kind": "route",
+        "label": "/api/projects/delete",
+        "source": "app/api/projects/delete/route.ts",
+        "metadata": {
+          "framework": "next",
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "routeKind": "api",
+          "methods": [
+            "DELETE"
+          ],
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action:DELETE@app/api/projects/delete/route.ts",
+        "kind": "action",
+        "label": "DELETE",
+        "source": "app/api/projects/delete/route.ts",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "symbolKind": "function",
+          "exported": true,
+          "line": 2,
+          "async": true
+        }
+      },
+      {
+        "id": "provider:package/@supabase/supabase-js",
+        "kind": "provider",
+        "label": "@supabase/supabase-js",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "external": true,
+          "package": "@supabase/supabase-js"
+        }
+      },
+      {
+        "id": "invariant:tenant.isolation",
+        "kind": "invariant",
+        "metadata": {
+          "declaredBy": "architecture-manifest"
+        }
+      },
+      {
+        "id": "resource:projects",
+        "kind": "resource",
+        "label": "projects",
+        "source": "app/api/projects/delete/route.ts",
+        "metadata": {
+          "provider": "supabase",
+          "resourceType": "table",
+          "declaredBy": "architecture-manifest",
+          "irFragmentProvenance": [
+            {
+              "adapter": "supabase",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "supabase.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action:http/DELETE:/api/projects/delete",
+        "kind": "action",
+        "label": "DELETE /api/projects/delete",
+        "source": "app/api/projects/delete/route.ts",
+        "metadata": {
+          "framework": "next",
+          "httpMethod": "DELETE",
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      },
+      {
+        "id": "provider:supabase",
+        "kind": "provider",
+        "label": "Supabase",
+        "source": "app/api/projects/delete/route.ts",
+        "metadata": {
+          "provider": "supabase",
+          "irFragmentProvenance": [
+            {
+              "adapter": "supabase",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "supabase.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "application:tenant-regression",
+        "to": "file:app/api/projects/delete/route.ts",
+        "relation": "contains",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "route:/api/projects/delete",
+        "to": "file:app/api/projects/delete/route.ts",
+        "relation": "implemented-by",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "action:DELETE@app/api/projects/delete/route.ts",
+        "to": "file:app/api/projects/delete/route.ts",
+        "relation": "defined-in",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "route:/api/projects/delete",
+        "to": "action:DELETE@app/api/projects/delete/route.ts",
+        "relation": "dispatches",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "file:app/api/projects/delete/route.ts",
+        "to": "provider:package/@supabase/supabase-js",
+        "relation": "uses-package",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "invariant:tenant.isolation",
+        "to": "resource:projects",
+        "relation": "protects",
+        "metadata": {
+          "declaredBy": "architecture-manifest"
+        }
+      },
+      {
+        "from": "file:app/api/projects/delete/route.ts",
+        "to": "route:/api/projects/delete",
+        "relation": "implements-route",
+        "metadata": {
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      },
+      {
+        "from": "route:/api/projects/delete",
+        "to": "action:http/DELETE:/api/projects/delete",
+        "relation": "dispatches",
+        "metadata": {
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      },
+      {
+        "from": "file:app/api/projects/delete/route.ts",
+        "to": "action:http/DELETE:/api/projects/delete",
+        "relation": "implements-action",
+        "metadata": {
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      },
+      {
+        "from": "provider:supabase",
+        "to": "resource:projects",
+        "relation": "provides",
+        "metadata": {
+          "irFragmentProvenance": [
+            {
+              "adapter": "supabase",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "supabase.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      },
+      {
+        "from": "action:DELETE@app/api/projects/delete/route.ts",
+        "to": "resource:projects",
+        "relation": "writes",
+        "metadata": {
+          "confidence": "medium",
+          "inferredBy": "supabase.source",
+          "irFragmentProvenance": [
+            {
+              "adapter": "supabase",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "supabase.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

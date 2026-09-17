@@ -1,0 +1,4 @@
+# Controlled scenario/demo source is validated separately and should not pollute Senten's own architecture graph.
+examples/scenarios/
+apps/showcase/
+showcase/

@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { actorFromString, parseElementRef, type AgentProfile, type AgentRunRecord, type AssuranceCaseRecord, type AssuranceExchangeBundle, type ChangeBundle, type TaskContextBundle, type ActorIdentity, type ApplicationIR, type CheckpointRecord, type JourneyDefinition, type LaunchProofResultBundle, type MemoryKind, type MemoryScope, type OperationEvent, type OperationRecord, type PackageKind, type EvidenceRecord, type RuntimeObservationRecord, type ProfileRecord, type RegistryConfig, type RollbackRecipe, type SemanticNode, type SentenConfig, type SessionRecord, type TransactionRecord, type WorkflowDefinition, type WorkflowRunRecord } from '../../core/src/index.js';
 import { StateTrussGraph } from '../../semantic/src/index.js';
 import { ExtensionRegistry } from '../../extension-sdk/src/index.js';
-import { DockerSandboxProvider, LocalSandboxProvider, createSandboxRunRecord, createSnapshot, expiredSandbox, providerFor, restoreSnapshot, workspaceDigest, type SandboxProviderKind } from '../../sandbox/src/index.js';
+import { DockerSandboxProvider, LocalSandboxProvider, assertSandboxEffectBoundary, createSandboxRunRecord, createSnapshot, expiredSandbox, providerFor, restoreSnapshot, workspaceDigest, type SandboxProviderKind } from '../../sandbox/src/index.js';
 import { LocalStateStore } from '../../local-state/src/index.js';
 import { MemoryService } from '../../memory/src/index.js';
 import { applyTemplate, createPackageFromDirectory, loadPackage, verifyPackage } from '../../templates/src/index.js';
@@ -17,6 +17,10 @@ import { buildChangeBundle, buildTaskContext, commandCapability, createAgent, ad
 import { clickthruWebsite, crawlWebsite, interactionToSemantic, runJourney } from '../../interaction/src/index.js';
 import { buildTrace, evidenceStrength, evidenceToSemantic, evaluateGuarantee, normalizeEvidence, normalizeRuntimeObservation, observationToEvidence, runtimeAlignment, summarizeEvidence } from '../../evidence-intelligence/src/index.js';
 import { reactAdapter } from '../../../adapters/react/src/index.js';
+import { nextAdapter } from '../../../adapters/next/src/index.js';
+import { expoAdapter } from '../../../adapters/expo/src/index.js';
+import { tauriAdapter } from '../../../adapters/tauri/src/index.js';
+import { supabaseAdapter } from '../../../adapters/supabase/src/index.js';
 import { gitIntegration } from '../../../integrations/git/src/index.js';
 import { launchProofIntegration, launchProofResultToEvidence } from '../../../integrations/launchproof/src/index.js';
 import { createAssuranceCase, createAssuranceExchange, evaluateAssuranceCase, extractAssuranceClaims } from '../../assurance/src/index.js';
@@ -24,9 +28,15 @@ import { collectProjectSnapshot, writeReport, type ReportFormat, type ReportKind
 import { startObservatory } from '../../observatory/src/index.js';
 import { checkCompatibility, generateSigningKey, loadTrustStore, signPackageManifest, trustPublicKey, verifyManifestSignatures } from '../../package-security/src/index.js';
 import { benchmark, runReleaseReadiness } from '../../release-readiness/src/index.js';
+import { analyzeAdoption } from '../../adoption/src/index.js';
+import { CapabilityRegistry, evaluateBudget, type CapabilityProvider, type OperationalBudget, type BudgetUsage } from '../../capabilities/src/index.js';
+import { compatibilityReport } from '../../stabilization/src/index.js';
+import { buildMcpToolDefinitions, runMcpStdioServer } from '../../mcp/src/index.js';
+import { computeBlastRadius } from '../../impact-intelligence/src/index.js';
+import { exportScenarioArtifacts, listScenarios, runScenario } from '../../scenario-lab/src/index.js';
 
-const VERSION = '0.11.1-alpha.0';
-const CORE_COMMANDS = ['welcome','init','create','use','discover','source','baseline','diff','drift','inspect','explain','graph','impact','element','history','undo','redo','session','transaction','checkpoint','rollback','memory','recall','profile','template','blueprint','registry','package','trust','workflow','cache','extensions','sandbox','crawl','clickthru','journey','paths','runtime','evidence','guarantee','assurance','launchproof','agent','context','commands','mcp','doctor','proof','report','observatory','release','benchmark','schema'] as const;
+const VERSION = '1.0.0-rc.3';
+const CORE_COMMANDS = ['welcome','init','adopt','declare','relate','why','lineage','capability','simulate','compatibility','create','use','discover','source','baseline','diff','drift','inspect','explain','graph','impact','element','history','undo','redo','session','transaction','checkpoint','rollback','memory','recall','profile','template','blueprint','registry','package','trust','workflow','cache','extensions','sandbox','crawl','clickthru','journey','paths','runtime','evidence','guarantee','assurance','launchproof','agent','context','commands','mcp','doctor','proof','report','observatory','release','benchmark','schema','scenario','showcase'] as const;
 
 export async function main(argv: string[]): Promise<void> {
   const cwd = process.cwd(); const [command, ...rest] = argv;
@@ -37,6 +47,14 @@ export async function main(argv: string[]): Promise<void> {
   switch (command) {
     case 'welcome': return printWelcome();
     case 'init': return initCommand(cwd, rest, registry);
+    case 'adopt': return adoptCommand(cwd, rest);
+    case 'declare': return declareCommand(cwd, rest);
+    case 'relate': return relateCommand(cwd, rest);
+    case 'why': return whyCommand(cwd, rest);
+    case 'lineage': return lineageCommand(cwd, rest);
+    case 'capability': return capabilityCommand(cwd, rest);
+    case 'simulate': return simulateCommand(cwd, rest);
+    case 'compatibility': return compatibilityCommand(cwd, rest);
     case 'create': return createCommand(cwd, rest);
     case 'use': return useCommand(cwd, rest, registry);
     case 'discover': return discoverCommand(cwd, rest);
@@ -88,6 +106,8 @@ export async function main(argv: string[]): Promise<void> {
     case 'release': return releaseCommand(cwd, rest);
     case 'benchmark': return benchmarkCommand(cwd, rest);
     case 'schema': return schemaCommand(registry, rest);
+    case 'scenario': return scenarioCommand(cwd, rest);
+    case 'showcase': return showcaseCommand(cwd, rest);
     default: { const ext=registry.get(command); if(ext) return runExtension(registry,command,cwd,rest); const suggestion=suggestCommand(command,[...CORE_COMMANDS,...registry.list().map(e=>e.namespace)]); console.error(`Unknown command: ${command}${suggestion?`\nDid you mean: ${suggestion}?`:''}\n`); printHelp(); process.exitCode=2; }
   }
 }
@@ -108,6 +128,8 @@ Get started
 Explore
   senten commands
   senten observatory
+  senten scenario list
+  senten showcase build
   senten --help
 
 Docs
@@ -124,6 +146,14 @@ Build & architecture:
   create <type> <name>           Create files, dirs, templates, profiles, checkpoints
   use template <name>            Apply a reusable template to the current project
   discover [--force]            Parse source and populate StateTruss automatically
+  adopt [--json]                 Initialize/discover an existing app and produce an adoption plan
+  declare <kind> <id>            Add an explicit semantic contract node
+  relate <from> <relation> <to>  Add an explicit semantic relationship
+  why <element>                  Explain semantic relationships and architectural rationale
+  lineage <element>              Trace semantic data/effect lineage across the graph
+  capability <...>               Provider-neutral capabilities, health and operational budgets
+  simulate <fault>               Record a safe deterministic failure-injection plan
+  compatibility                  Check IR/protocol compatibility for stabilization
   source <status|files>          Inspect source-intelligence state
   baseline <create|list|accept>  Architecture baselines for drift detection
   diff [--against <baseline>]    Semantic architecture diff
@@ -173,7 +203,7 @@ Safety & ecosystem:
   proof [target]                Guarantee/evidence status
   report <kind|list>            Canonical JSON/Markdown/HTML reports
   observatory                   Local application intelligence workbench
-  release check                 Public-release readiness and security gate
+  release check [--rc]          Public-release / RC readiness and security gate
   benchmark                     Measure local Senten read-path performance
   schema command <name>         Machine-readable command schema
 
@@ -214,7 +244,7 @@ Examples:
   senten context --task "modify billing safely" --agent codex
 `); }
 
-function defaultRegistry(): ExtensionRegistry { return new ExtensionRegistry().register(reactAdapter).register(gitIntegration).register(launchProofIntegration); }
+function defaultRegistry(): ExtensionRegistry { return new ExtensionRegistry().register(reactAdapter).register(nextAdapter).register(expoAdapter).register(tauriAdapter).register(supabaseAdapter).register(gitIntegration).register(launchProofIntegration); }
 
 async function initCommand(cwd:string,args:string[],registry:ExtensionRegistry):Promise<void>{
   if(args[0]==='template'){
@@ -230,7 +260,7 @@ async function initProject(cwd:string,args:string[]):Promise<void>{
   const configPath=join(cwd,'senten.config.json'); if(!force&&await exists(configPath))throw new Error('senten.config.json already exists. Use --force to replace it.');
   const name=basename(cwd); const config:SentenConfig={application:{id:slug(name),name},environment:'development',extensions:['react','git','launchproof'],registries:[{name:'local',type:'local',location:'.senten/packages',trusted:true}]};
   await writeFile(configPath,JSON.stringify(config,null,2)+'\n'); const graph=new StateTrussGraph(config.application); graph.addNode({id:`application:${config.application.id}`,kind:'application',label:config.application.name}); await writeIR(cwd,graph.toIR());
-  const store=await LocalStateStore.open(cwd); await migrateLegacyHistory(cwd,store); store.set('schema.version','0.11.0'); store.close();
+  const store=await LocalStateStore.open(cwd); await migrateLegacyHistory(cwd,store); store.set('schema.version','0.20.0'); store.close();
   console.log(`✓ Senten initialized\n\nApplication  ${config.application.name}\nState        .senten/senten.db\nCache        .senten/cache/\nRegistry     local (.senten/packages)\n\nNext\n  senten discover\n  senten doctor\n\nExplore\n  senten commands\n  senten observatory`);
 }
 
@@ -307,7 +337,7 @@ function printSemanticDiff(d:SemanticDiff,title:string,json:boolean):void{if(jso
 async function inspectProject(cwd:string,args:string[]):Promise<void>{ const format=flagValue(args,'--format')??(args.includes('--json')?'json':'human'); const ir=await loadIR(cwd); const store=await LocalStateStore.open(cwd); const sourceStatsRaw=store.get('source.stats');const sourceFrameworksRaw=store.get('source.frameworks');const summary={application:ir.application,schemaVersion:ir.schemaVersion,nodes:ir.nodes.length,edges:ir.edges.length,kinds:countBy(ir.nodes,n=>n.kind),operations:store.listOperations().length,operationEvents:store.eventCount(),memories:store.listMemory().length,sessions:store.listSessions().length,runtimeObservations:store.listRuntimeObservations().length,runtimeTraces:store.listRuntimeTraces().length,evidence:store.listEvidence().length,source:sourceStatsRaw?JSON.parse(sourceStatsRaw):undefined,frameworks:sourceFrameworksRaw?JSON.parse(sourceFrameworksRaw):[],generatedAt:ir.generatedAt};store.close();if(format==='json')console.log(JSON.stringify(summary,null,2));else{console.log(`SENTEN INSPECT\nApplication  ${ir.application.name}\nIR           ${ir.schemaVersion}\nNodes        ${ir.nodes.length}\nEdges        ${ir.edges.length}\nOperations   ${summary.operations}\nMemory       ${summary.memories}\nSessions     ${summary.sessions}\nRuntime      ${summary.runtimeObservations} observations / ${summary.runtimeTraces} traces\nEvidence     ${summary.evidence}${summary.source?`\nSource files ${summary.source.files}\nFrameworks   ${summary.frameworks.join(', ')||'none'}`:''}`);for(const [kind,count] of Object.entries(summary.kinds))console.log(`${kind.padEnd(12)} ${count}`);} }
 async function explain(cwd:string,args:string[]):Promise<void>{const target=args.find(a=>!a.startsWith('-'));if(!target)throw new Error('Usage: senten explain <element>');const ir=await loadIR(cwd);const graph=StateTrussGraph.fromIR(ir);const ref=resolveSemanticRef(target,ir.nodes);const node=graph.get(ref);if(!node){const elementRef=parseElementRef(target);const path=resolveElementPath(cwd,elementRef.id);if(await exists(path)){const info=await stat(path);console.log(`ELEMENT\nTarget       ${target}\nResolved     ${relative(cwd,path)||'.'}\nType         ${info.isDirectory()?'directory':'file'}\nSize         ${info.size} bytes`);return;}throw new Error(`Unknown element: ${target}`);}console.log(JSON.stringify({node,related:graph.related(node.id)},null,2));}
 async function graph(cwd:string,args:string[]):Promise<void>{const format=flagValue(args,'--format')??(args.includes('--json')?'json':'human');const ir=await loadIR(cwd);if(format==='json')return console.log(JSON.stringify(ir,null,2));console.log(`STATETRUSS — ${ir.application.name}`);for(const node of ir.nodes)console.log(`• ${node.id} [${node.kind}]`);for(const edge of ir.edges)console.log(`  ${edge.from} -(${edge.relation})-> ${edge.to}`);}
-async function impact(cwd:string,args:string[]):Promise<void>{const target=args.find(a=>!a.startsWith('-'));if(!target)throw new Error('Usage: senten impact <semantic-element>');const ir=await loadIR(cwd);const g=StateTrussGraph.fromIR(ir);const id=resolveSemanticRef(target,ir.nodes);if(!g.get(id))throw new Error(`Unknown semantic element: ${target}`);const rows=g.impact(id,Number(flagValue(args,'--depth')??'3'));console.log(`IMPACT — ${id}\nAffected ${rows.length}`);for(const row of rows)console.log(`${'  '.repeat(row.depth)}↳ ${row.node.id} via ${row.via}`);}
+async function impact(cwd:string,args:string[]):Promise<void>{const target=args.find(a=>!a.startsWith('-'));if(!target)throw new Error('Usage: senten impact <semantic-element> [--depth N] [--json]');const ir=await loadIR(cwd);const id=resolveSemanticRef(target,ir.nodes);const report=computeBlastRadius(ir,id,Number(flagValue(args,'--depth')??'4'));if(args.includes('--json'))return console.log(JSON.stringify(report,null,2));console.log(`IMPACT — ${id}\nAffected ${report.affected}\nRisk     ${report.risk.toUpperCase()} (${report.riskScore}/100)`);for(const row of report.paths)console.log(`${'  '.repeat(row.depth)}↳ ${row.node.id} via ${row.via} [${row.direction}]`);if(report.criticalSubjects.length)console.log(`Critical  ${report.criticalSubjects.join(', ')}`);}
 
 async function element(cwd:string,args:string[]):Promise<void>{
   await requireInitialized(cwd); const targetRaw=args[0],action=args[1];if(!targetRaw||!action)throw new Error('Usage: senten element <target> <inspect|copy|move|rename|delete> [destination] [--dry-run]');const dryRun=args.includes('--dry-run');const ref=parseElementRef(targetRaw);
@@ -505,7 +535,7 @@ async function trustCommand(cwd:string,args:string[]):Promise<void>{
 
 async function cacheCommand(cwd:string,args:string[]):Promise<void>{await requireInitialized(cwd);const action=args[0]??'status';const path=join(cwd,'.senten','cache');if(action==='clear'){await rm(path,{recursive:true,force:true});await mkdir(path,{recursive:true});console.log('CACHE CLEARED');return;}const size=await dirSize(path);console.log(`CACHE\nPath   ${relative(cwd,path)}\nSize   ${size} bytes\nRule   disposable / rebuildable`);}
 
-async function extensions(registry:ExtensionRegistry,args:string[]):Promise<void>{const action=args[0];const rows=registry.list();if(action==='inspect'||action==='validate'){const ns=args[1];if(!ns)throw new Error(`Usage: senten extensions ${action} <namespace>`);const ext=registry.get(ns);if(!ext)throw new Error(`Extension not found: ${ns}`);if(action==='inspect')return console.log(JSON.stringify(ext,null,2));const { validateSentenExtension }=await import('../../extension-sdk/src/index.js');const result=validateSentenExtension(ext);console.log(`EXTENSION VALIDATE ${result.ok?'PASS':'FAIL'}\n${ext.namespace}@${ext.version}\nSenten ${ext.senten}\nCapabilities ${ext.capabilities.join(', ')||'-'}`);for(const e of result.errors)console.log(`  ! ${e}`);for(const w of result.warnings)console.log(`  ~ ${w}`);if(!result.ok)process.exitCode=1;return;}if(args.includes('--json'))return console.log(JSON.stringify(rows,null,2));for(const ext of rows)console.log(`${ext.namespace.padEnd(14)} ${ext.kind.padEnd(11)} ${ext.version}  ${ext.name}`);}
+async function extensions(registry:ExtensionRegistry,args:string[]):Promise<void>{const action=args[0];const rows=registry.list();if(action==='audit'){const { validateSentenExtension }=await import('../../extension-sdk/src/index.js');let failures=0;for(const ext of rows){const result=validateSentenExtension(ext);if(!result.ok)failures++;console.log(`${result.ok?'PASS':'FAIL'} ${ext.namespace}@${ext.version} capabilities=${ext.capabilities.join(',')||'-'}${result.warnings.length?` warnings=${result.warnings.length}`:''}`);}if(failures)process.exitCode=1;return;}if(action==='inspect'||action==='validate'){const ns=args[1];if(!ns)throw new Error(`Usage: senten extensions ${action} <namespace>`);const ext=registry.get(ns);if(!ext)throw new Error(`Extension not found: ${ns}`);if(action==='inspect')return console.log(JSON.stringify(ext,null,2));const { validateSentenExtension }=await import('../../extension-sdk/src/index.js');const result=validateSentenExtension(ext);console.log(`EXTENSION VALIDATE ${result.ok?'PASS':'FAIL'}\n${ext.namespace}@${ext.version}\nSenten ${ext.senten}\nCapabilities ${ext.capabilities.join(', ')||'-'}`);for(const e of result.errors)console.log(`  ! ${e}`);for(const w of result.warnings)console.log(`  ~ ${w}`);if(!result.ok)process.exitCode=1;return;}if(args.includes('--json'))return console.log(JSON.stringify(rows,null,2));for(const ext of rows)console.log(`${ext.namespace.padEnd(14)} ${ext.kind.padEnd(11)} ${ext.version}  ${ext.name}`);}
 async function runExtension(registry:ExtensionRegistry,namespace:string,cwd:string,args:string[]):Promise<void>{const path=args[0]??'';const command=registry.command(namespace,path);if(!command){const ext=registry.get(namespace)!;console.log(`${ext.name} (${ext.version})`);for(const cmd of ext.commands??[])console.log(`  senten ${namespace} ${cmd.path.padEnd(14)} ${cmd.description}`);return;}const code=await command.run({cwd,args:args.slice(1),flags:parseFlags(args.slice(1))});if(typeof code==='number')process.exitCode=code;}
 async function sandbox(cwd:string,args:string[]):Promise<void>{
   await requireInitialized(cwd);
@@ -557,8 +587,9 @@ Secrets    ${(handle.record.syntheticSecretNames??[]).join(', ')||'none'}`);
       const id=args[1];if(!id)throw new Error('Usage: senten sandbox run <id> -- <command> [args...]');const sbx=store.getSandbox(id);if(!sbx||sbx.status!=='active')throw new Error(`Active sandbox not found: ${id}`);
       const separator=args.indexOf('--');if(separator<0||!args[separator+1]){const suspicious=args.slice(2).find(a=>a.startsWith('--')&&a!=='--');const hint=suspicious?`\n\nIt looks like you may be missing the command separator. Example:\n  senten sandbox run ${id} -- node --version\n\nThe standalone -- separates Senten options from the command executed inside the sandbox.`:'';throw new Error(`Usage: senten sandbox run <id> -- <command> [args...]${hint}`);}
       const command=args[separator+1]!,commandArgs=args.slice(separator+2);const options=args.slice(2,separator);const cwdFlag=flagValue(options,'--cwd');const timeout=parseDurationMs(flagValue(options,'--timeout'));const maxOutputValue=flagValue(options,'--max-output');const envEntries=multiFlagValues(options,'--env');const env:Record<string,string>={};for(const entry of envEntries){const [key,...rest]=entry.split('=');if(!key||!rest.length)throw new Error(`Invalid --env value: ${entry}`);env[key]=rest.join('=');}
-      const snapshot=await createSnapshot(sbx,join(cwd,'.senten','snapshots'),`before ${command}`);store.putSandboxSnapshot(snapshot);const before=await workspaceDigest(sbx.root);const p=await providerFor(sbx.provider);const handle=await p.open(sbx);const result=await handle.run({command,args:commandArgs,cwd:cwdFlag,env,timeoutMs:timeout,maxOutputBytes:maxOutputValue?parseSize(maxOutputValue):undefined});const after=await workspaceDigest(sbx.root);const run=createSandboxRunRecord(sbx,{command,args:commandArgs,cwd:cwdFlag,env,timeoutMs:timeout},result,snapshot.id,before,after);store.putSandboxRun(run);
-      console.log(`SANDBOX RUN ${run.id}\nExit       ${result.code}\nDuration   ${result.durationMs}ms\nTimed out  ${result.timedOut?'yes':'no'}\nChanged    ${before===after?'no':'yes'}\nSnapshot   ${snapshot.id}`);
+      const runSpec={command,args:commandArgs,cwd:cwdFlag,env,timeoutMs:timeout,maxOutputBytes:maxOutputValue?parseSize(maxOutputValue):undefined,effectIntent:options.includes('--include-actions')?'mutating' as const:'read-only' as const,allowLiveEffects:options.includes('--allow-live-effects')};const boundary=assertSandboxEffectBoundary(sbx,runSpec);
+      const snapshot=await createSnapshot(sbx,join(cwd,'.senten','snapshots'),`before ${command}`);store.putSandboxSnapshot(snapshot);const before=await workspaceDigest(sbx.root);const p=await providerFor(sbx.provider);const handle=await p.open(sbx);const result=await handle.run(runSpec);const after=await workspaceDigest(sbx.root);const run=createSandboxRunRecord(sbx,runSpec,result,snapshot.id,before,after,{effectIntent:runSpec.effectIntent,effectBoundary:boundary.mode,effectBoundaryReason:boundary.reason,liveEffectsAllowed:runSpec.allowLiveEffects});store.putSandboxRun(run);
+      console.log(`SANDBOX RUN ${run.id}\nExit       ${result.code}\nDuration   ${result.durationMs}ms\nTimed out  ${result.timedOut?'yes':'no'}\nChanged    ${before===after?'no':'yes'}\nEffects    ${boundary.mode}\nSnapshot   ${snapshot.id}`);
       if(result.stdout)process.stdout.write(result.stdout+(result.stdout.endsWith('\n')?'':'\n'));
       if(result.stderr)process.stderr.write(result.stderr+(result.stderr.endsWith('\n')?'':'\n'));
       if(result.truncated)console.log('[output truncated]');
@@ -628,8 +659,8 @@ async function crawlCommand(cwd:string,args:string[]):Promise<void>{
   for(const f of result.findings.slice(0,20))console.log(`  ${f.severity.toUpperCase()} ${f.kind} ${f.url} — ${f.message}`);if(result.run.status==='failed'&&args.includes('--strict'))process.exitCode=1;
 }
 async function clickthruCommand(cwd:string,args:string[]):Promise<void>{
-  await requireInitialized(cwd);const url=args.find(a=>!a.startsWith('--'));if(!url)throw new Error('Usage: senten clickthru <url> [--browser chromium] [--max-pages 20] [--headed] [--strict]');
-  const browser=(flagValue(args,'--browser')??'chromium') as 'chromium'|'firefox'|'webkit';const timeoutMs=parseDurationMs(flagValue(args,'--timeout'));const result=await clickthruWebsite(url,{browser,headless:!args.includes('--headed'),maxPages:Number(flagValue(args,'--max-pages')??20),maxInteractionsPerPage:Number(flagValue(args,'--max-interactions')??100),includeActions:args.includes('--include-actions'),sameOrigin:!args.includes('--external'),...(timeoutMs!==undefined?{timeoutMs}:{})});await persistInteractionResult(cwd,result);
+  await requireInitialized(cwd);const url=args.find(a=>!a.startsWith('--'));if(!url)throw new Error('Usage: senten clickthru <url> [--browser chromium] [--device mobile|tablet|desktop] [--viewport 390x844] [--max-pages 20] [--headed] [--strict]');
+  const browser=(flagValue(args,'--browser')??'chromium') as 'chromium'|'firefox'|'webkit';const timeoutMs=parseDurationMs(flagValue(args,'--timeout'));const viewport=parseViewport(flagValue(args,'--viewport')??deviceViewport(flagValue(args,'--device')));const includeActions=args.includes('--include-actions');if(includeActions&&!args.includes('--allow-live-effects'))throw new Error('Mutating click-through probes are not a containment boundary. Re-run with --allow-live-effects only for an explicitly authorized non-production target, or execute the target inside a network-denied Senten sandbox.');const result=await clickthruWebsite(url,{browser,headless:!args.includes('--headed'),maxPages:Number(flagValue(args,'--max-pages')??20),maxInteractionsPerPage:Number(flagValue(args,'--max-interactions')??100),includeActions,sameOrigin:!args.includes('--external'),...(timeoutMs!==undefined?{timeoutMs}:{}),...(viewport?{viewport}:{})});await persistInteractionResult(cwd,result);
   if(args.includes('--json')){console.log(JSON.stringify(result,null,2));return;}
   console.log(`SENTEN CLICKTHRU ${result.run.id}\nBrowser       ${browser}\nPages         ${result.run.pages}\nControls      ${result.run.interactions}\nFindings      ${result.run.findings}\nStatus        ${result.run.status}`);for(const f of result.findings.slice(0,30))console.log(`  ${f.severity.toUpperCase()} ${f.kind} ${f.url} — ${f.message}`);if(result.run.status==='failed'&&args.includes('--strict'))process.exitCode=1;
 }
@@ -638,7 +669,7 @@ async function journeyCommand(cwd:string,args:string[]):Promise<void>{
   if(action==='create'){const name=args[1],baseUrl=args[2];if(!name)throw new Error('Usage: senten journey create <name> [base-url]');const def:JourneyDefinition={senten:1,kind:'journey',name,version:'0.1.0',description:`Critical journey: ${name}`,...(baseUrl?{baseUrl}:{}),steps:[{id:'open',type:'goto',value:baseUrl??'${baseUrl}'},{id:'ready',type:'expect-visible',selector:'body'}]};const path=join(dir,`${slug(name)}.json`);if(await exists(path)&&!args.includes('--force'))throw new Error(`Journey already exists: ${name}`);await writeFile(path,JSON.stringify(def,null,2)+'\n');console.log(`JOURNEY CREATED ${name}\n${relative(cwd,path)}`);return;}
   if(action==='list'){const files=(await readdir(dir)).filter(f=>f.endsWith('.json'));if(!files.length){console.log('No journeys.');return;}for(const file of files){const def=JSON.parse(await readFile(join(dir,file),'utf8')) as JourneyDefinition;console.log(`${def.name.padEnd(24)} ${def.version.padEnd(10)} ${def.steps.length} steps  ${def.baseUrl??''}`);}return;}
   if(action==='inspect'){const name=args[1];if(!name)throw new Error('Usage: senten journey inspect <name>');const def=await loadJourneyFile(dir,name);console.log(JSON.stringify(def,null,2));return;}
-  if(action==='run'){const name=args[1];if(!name)throw new Error('Usage: senten journey run <name> [--browser chromium] [--base-url URL] [--input key=value]');const def=await loadJourneyFile(dir,name);const inputs:Record<string,string>={};for(const item of multiFlagValues(args,'--input')){const [k,...v]=item.split('=');if(k)inputs[k]=v.join('=');}const browser=(flagValue(args,'--browser')??'chromium') as 'chromium'|'firefox'|'webkit';const baseUrl=flagValue(args,'--base-url');const result=await runJourney(def,{browser,headless:!args.includes('--headed'),...(baseUrl?{baseUrl}:{}),inputs});const store=await LocalStateStore.open(cwd);const journeyEvidence:EvidenceRecord={id:`ev_${randomUUID().slice(0,12)}`,subject:`journey:${def.name}`,claim:`Critical journey ${def.name} ${result.run.status}`,source:`senten.interaction:${result.run.engine}`,status:result.run.status==='passed'?'tested':'failed',strength:result.run.status==='passed'?3:0,evidenceType:'interaction',timestamp:result.run.endedAt,metadata:{runId:result.run.id,steps:result.steps.length,findings:result.findings.length}};try{store.putInteractionRun(result.run);for(const f of result.findings)store.putInteractionFinding(f);store.putEvidence(journeyEvidence);}finally{store.close();}const journeyIr=await loadIR(cwd);await writeIR(cwd,evidenceToSemantic(journeyIr,[journeyEvidence]));console.log(`JOURNEY ${name} — ${result.run.status.toUpperCase()}\nRun      ${result.run.id}\nBrowser  ${browser}\nSteps    ${result.steps.length}\nFindings ${result.findings.length}`);for(const step of result.steps)console.log(`  ${step.status==='passed'?'✓':'✕'} ${step.id} (${step.type})${step.error?` — ${step.error}`:''}`);if(result.run.status==='failed')process.exitCode=1;return;}
+  if(action==='run'){const name=args[1];if(!name)throw new Error('Usage: senten journey run <name> [--browser chromium] [--base-url URL] [--input key=value]');const def=await loadJourneyFile(dir,name);const inputs:Record<string,string>={};for(const item of multiFlagValues(args,'--input')){const [k,...v]=item.split('=');if(k)inputs[k]=v.join('=');}const browser=(flagValue(args,'--browser')??'chromium') as 'chromium'|'firefox'|'webkit';const baseUrl=flagValue(args,'--base-url');const viewport=parseViewport(flagValue(args,'--viewport')??deviceViewport(flagValue(args,'--device')));const result=await runJourney(def,{browser,headless:!args.includes('--headed'),...(baseUrl?{baseUrl}:{}),inputs,...(viewport?{viewport}:{})});const store=await LocalStateStore.open(cwd);const journeyEvidence:EvidenceRecord={id:`ev_${randomUUID().slice(0,12)}`,subject:`journey:${def.name}`,claim:`Critical journey ${def.name} ${result.run.status}`,source:`senten.interaction:${result.run.engine}`,status:result.run.status==='passed'?'tested':'failed',strength:result.run.status==='passed'?3:0,evidenceType:'interaction',timestamp:result.run.endedAt,metadata:{runId:result.run.id,steps:result.steps.length,findings:result.findings.length}};try{store.putInteractionRun(result.run);for(const f of result.findings)store.putInteractionFinding(f);store.putEvidence(journeyEvidence);}finally{store.close();}const journeyIr=await loadIR(cwd);await writeIR(cwd,evidenceToSemantic(journeyIr,[journeyEvidence]));console.log(`JOURNEY ${name} — ${result.run.status.toUpperCase()}\nRun      ${result.run.id}\nBrowser  ${browser}\nSteps    ${result.steps.length}\nFindings ${result.findings.length}`);for(const step of result.steps)console.log(`  ${step.status==='passed'?'✓':'✕'} ${step.id} (${step.type})${step.error?` — ${step.error}`:''}`);if(result.run.status==='failed')process.exitCode=1;return;}
   if(action==='history'){const store=await LocalStateStore.open(cwd);try{for(const run of store.listInteractionRuns('journey'))console.log(`${run.id.padEnd(14)} ${run.status.padEnd(7)} ${run.target.padEnd(24)} ${run.engine}`);}finally{store.close();}return;}
   throw new Error('Usage: senten journey <create|list|inspect|run|history>');
 }
@@ -693,6 +724,14 @@ async function runtimeCommand(cwd:string,args:string[]):Promise<void>{
 async function evidenceCommand(cwd:string,args:string[]):Promise<void>{
   await requireInitialized(cwd);const action=args[0]??'summary';const store=await LocalStateStore.open(cwd);
   try{
+    if(action==='test'){
+      const subject=args[1];const sep=args.indexOf('--');if(!subject||sep<0||!args[sep+1])throw new Error('Usage: senten evidence test <subject> --allow-exec -- <command> [args...]');if(!args.includes('--allow-exec'))throw new Error('Dynamic test evidence requires explicit --allow-exec authorization.');
+      const command=args[sep+1]!;const commandArgs=args.slice(sep+2);const run=spawnSync(command,commandArgs,{cwd,encoding:'utf8',shell:false,timeout:Number(flagValue(args,'--timeout')??120000)});const status:EvidenceRecord['status']=run.status===0?'tested':'failed';const record:EvidenceRecord=normalizeEvidence({id:`ev_${randomUUID().slice(0,12)}`,subject,claim:`Explicit test command ${status==='tested'?'passed':'failed'}: ${[command,...commandArgs].join(' ')}`,source:`command:${basename(command)}`,status,timestamp:new Date().toISOString(),evidenceType:'test',metadata:{command:[command,...commandArgs],exitCode:run.status,signal:run.signal??null,stdoutDigest:sha256(run.stdout??''),stderrDigest:sha256(run.stderr??'')}});store.putEvidence(record);const ir=await loadIR(cwd);await writeIR(cwd,evidenceToSemantic(ir,[record]));if(args.includes('--json'))console.log(JSON.stringify(record,null,2));else console.log(`TEST EVIDENCE ${record.id}
+Subject  ${subject}
+Status   ${status}
+Exit     ${run.status??'-'}
+Source   ${record.source}`);if(status==='failed')process.exitCode=1;return;
+    }
     if(action==='add'||action==='record'){
       const subject=args[1];const claim=flagValue(args,'--claim')??collectPositionalAfter(args,2);if(!subject||!claim)throw new Error('Usage: senten evidence add <subject> <claim> [--status observed] [--source manual]');const status=(flagValue(args,'--status')??'observed') as EvidenceRecord['status'];validateEvidenceStatus(status);if(status==='verified')throw new Error('Manual evidence cannot be marked verified. Import trusted independent verifier results (for example LaunchProof) instead.');const environment=flagValue(args,'--env');const record:EvidenceRecord=normalizeEvidence({id:`ev_${randomUUID().slice(0,12)}`,subject,claim,source:flagValue(args,'--source')??'manual',status,timestamp:new Date().toISOString(),evidenceType:'manual',...(environment?{environment}:{})});store.putEvidence(record);const ir=await loadIR(cwd);await writeIR(cwd,evidenceToSemantic(ir,[record]));console.log(`EVIDENCE ${record.id}\nSubject  ${subject}\nStatus   ${status}\nStrength ${record.strength}\nSource   ${record.source}`);return;
     }
@@ -708,7 +747,7 @@ async function evidenceCommand(cwd:string,args:string[]):Promise<void>{
     if(action==='export'){
       const rows=store.listEvidence();const out=flagValue(args,'--output');const payload=JSON.stringify(rows,null,2)+'\n';if(out){await writeFile(resolve(cwd,out),payload);console.log(`EVIDENCE EXPORTED ${rows.length} -> ${out}`);}else console.log(payload.trimEnd());return;
     }
-    throw new Error('Usage: senten evidence <add|list|inspect|summary|export>');
+    throw new Error('Usage: senten evidence <add|test|list|inspect|summary|export>');
   }finally{store.close();}
 }
 
@@ -825,6 +864,11 @@ async function doctor(cwd:string,args:string[]):Promise<void>{
     process.exitCode=1;return;
   }
   const checks:Array<{name:string;ok:boolean;detail:string;required:boolean}>=[];
+  checks.push({name:'CLI distribution',ok:true,detail:`${VERSION} via ${process.argv[1]??'unknown entrypoint'}`,required:true});
+  try{const pkg=JSON.parse(await readFile(join(cwd,'package.json'),'utf8')) as {name?:string;version?:string;dependencies?:Record<string,string>;devDependencies?:Record<string,string>};
+    if(pkg.name==='senten'&&pkg.version&&pkg.version!==VERSION)checks.push({name:'CLI/source version alignment',ok:false,detail:`running ${VERSION}; repository package.json is ${pkg.version}`,required:true});
+    const requested=pkg.dependencies?.senten??pkg.devDependencies?.senten;if(requested&&/^\d+\.\d+\.\d+/.test(requested)&&requested!==VERSION)checks.push({name:'Project Senten dependency alignment',ok:false,detail:`running ${VERSION}; project requests senten ${requested}`,required:false});
+  }catch{}
   checks.push({name:'Node >=22.5',ok:nodeAtLeast(22,5),detail:process.versions.node,required:true});
   checks.push({name:'senten.config.json',ok:await exists(join(cwd,'senten.config.json')),detail:'',required:true});
   checks.push({name:'.senten directory',ok:await exists(join(cwd,'.senten')),detail:'',required:true});
@@ -848,11 +892,20 @@ LaunchProof    ${store.listLaunchProofResults().length} result bundle(s), ${evid
 
 
 async function releaseCommand(cwd:string,args:string[]):Promise<void>{
-  const action=args[0]??'check'; if(action!=='check')throw new Error('Usage: senten release check [--strict] [--json]');
-  const report=await runReleaseReadiness(cwd);
-  if(args.includes('--json'))console.log(JSON.stringify(report,null,2));
-  else{console.log(`SENTEN RELEASE CHECK\nReady      ${report.ready?'yes':'no'}\nPassed     ${report.passed}\nWarnings   ${report.warnings}\nErrors     ${report.errors}\nDuration   ${report.durationMs}ms`);for(const c of report.checks)console.log(`  ${c.status==='pass'?'✓':c.status==='warn'?'!':'✕'} ${c.label}: ${c.detail}`);}
-  if(!report.ready||(args.includes('--strict')&&report.warnings>0))process.exitCode=1;
+  const action=args[0]??'check'; if(action!=='check')throw new Error('Usage: senten release check [--strict] [--rc] [--json]');
+  const report=await runReleaseReadiness(cwd);let rc:unknown=undefined;let rcFailed=false;
+  if(args.includes('--rc')){await requireInitialized(cwd);const ir=await loadIR(cwd);const adoption=await analyzeAdoption(cwd,ir);let packageVersion='unknown';try{const pkg=JSON.parse(await readFile(join(cwd,'package.json'),'utf8')) as {version?:string};packageVersion=pkg.version??'unknown';}catch{}const compat=compatibilityReport(ir);const critical=adoption.gaps.filter(g=>g.severity==='critical');const requirements={releaseCandidateVersion:/-rc\./.test(packageVersion)||/-rc\./.test(VERSION),compatibility:compat.compatible,noCriticalAdoptionGaps:critical.length===0};rc={version:VERSION,packageVersion,compatibility:compat,adoption:{readiness:adoption.readiness,criticalGaps:critical},requirements};rcFailed=!(requirements.releaseCandidateVersion&&requirements.compatibility&&requirements.noCriticalAdoptionGaps);}
+  if(args.includes('--json'))console.log(JSON.stringify({...report,...(rc?{rc}:{})},null,2));
+  else{console.log(`SENTEN RELEASE CHECK
+Ready      ${report.ready&&!rcFailed?'yes':'no'}
+Passed     ${report.passed}
+Warnings   ${report.warnings}
+Errors     ${report.errors}
+Duration   ${report.durationMs}ms`);for(const c of report.checks)console.log(`  ${c.status==='pass'?'✓':c.status==='warn'?'!':'✕'} ${c.label}: ${c.detail}`);if(rc){const r=rc as {packageVersion:string;requirements:{releaseCandidateVersion:boolean;compatibility:boolean;noCriticalAdoptionGaps:boolean}};console.log(`RC gate
+  ${r.requirements.releaseCandidateVersion?'✓':'✕'} release-candidate version (${r.packageVersion})
+  ${r.requirements.compatibility?'✓':'✕'} protocol compatibility
+  ${r.requirements.noCriticalAdoptionGaps?'✓':'✕'} no critical adoption gaps`);}}
+  if(!report.ready||rcFailed||(args.includes('--strict')&&report.warnings>0))process.exitCode=1;
 }
 
 async function benchmarkCommand(cwd:string,args:string[]):Promise<void>{
@@ -881,9 +934,10 @@ async function agentCommand(cwd:string,args:string[],registry:ExtensionRegistry)
     if(action==='disable'||action==='enable'){const id=args[1];if(!id)throw new Error(`Usage: senten agent ${action} <id>`);const a=store.getAgent(id);if(!a)throw new Error(`Agent not found: ${id}`);store.putAgent({...a,status:action==='enable'?'active':'disabled',updatedAt:new Date().toISOString()});console.log(`AGENT ${id} ${action==='enable'?'ENABLED':'DISABLED'}`);return;}
     if(action==='history'){const id=args[1]&&!args[1].startsWith('-')?args[1]:undefined;const rows=store.listAgentRuns(id).slice().reverse();if(args.includes('--json'))return console.log(JSON.stringify(rows,null,2));if(!rows.length)return console.log('No agent runs.');for(const r of rows)console.log(`${r.id}  ${r.status.padEnd(7)} ${r.agentId.padEnd(16)} ${r.command} ${r.args.join(' ')}`);return;}
     if(action==='change-bundle'){const runId=args[1];if(!runId)throw new Error('Usage: senten agent change-bundle <run-id>');const run=store.getAgentRun(runId);if(!run)throw new Error(`Agent run not found: ${runId}`);const ops=run.operationIds.map(id=>store.getOperation(id)).filter((x):x is OperationRecord=>Boolean(x));const bundle=buildChangeBundle({intent:run.task??`${run.command} ${run.args.join(' ')}`,run,operations:ops,actor:{type:'agent',id:run.agentId},...(run.contextBundleId?{contextBundleId:run.contextBundleId}:{})});store.putChangeBundle(bundle);console.log(JSON.stringify(bundle,null,2));return;}
+    if(action==='handoff'){const from=args[1],to=args[2],task=flagValue(args,'--task');if(!from||!to||!task)throw new Error('Usage: senten agent handoff <from> <to> --task <task>');const source=store.getAgent(from),target=store.getAgent(to);if(!source)throw new Error(`Agent not found: ${from}`);if(!target)throw new Error(`Agent not found: ${to}`);if(target.status!=='active')throw new Error(`Target agent is not active: ${to}`);const context=await generateContext(cwd,task,target);await saveContextArtifact(cwd,context);const handoff={id:`handoff_${randomUUID().slice(0,10)}`,createdAt:new Date().toISOString(),fromAgentId:from,toAgentId:to,task,contextBundleId:context.id,permissions:context.permissions,sourceDigest:context.sourceDigest,policy:'project-scoped; credentials excluded; target-agent grants applied'};const dir=join(cwd,'.senten','artifacts','handoffs');await mkdir(dir,{recursive:true});await writeFile(join(dir,`${handoff.id}.json`),JSON.stringify(handoff,null,2)+'\n');if(args.includes('--json'))return console.log(JSON.stringify(handoff,null,2));console.log(`AGENT HANDOFF ${handoff.id}\nFrom       ${from}\nTo         ${to}\nTask       ${task}\nContext    ${context.id}\nPolicy     ${handoff.policy}`);return;}
   }finally{ if(action!=='run')store.close(); }
   if(action==='run')return runAgent(cwd,args.slice(1),registry,store);
-  throw new Error('Usage: senten agent <create|list|inspect|grant|revoke|enable|disable|run|history|change-bundle>');
+  throw new Error('Usage: senten agent <create|list|inspect|grant|revoke|enable|disable|run|history|change-bundle|handoff>');
 }
 
 async function runAgent(cwd:string,args:string[],registry:ExtensionRegistry,store:LocalStateStore):Promise<void>{
@@ -892,11 +946,25 @@ async function runAgent(cwd:string,args:string[],registry:ExtensionRegistry,stor
 
 async function contextCommand(cwd:string,args:string[]):Promise<void>{await requireInitialized(cwd);const task=flagValue(args,'--task')??args.filter(a=>!a.startsWith('--')).join(' ');if(!task)throw new Error('Usage: senten context --task <task> [--agent id] [--json]');const agentId=flagValue(args,'--agent');const store=await LocalStateStore.open(cwd);let agent:AgentProfile|undefined;try{if(agentId){agent=store.getAgent(agentId);if(!agent)throw new Error(`Agent not found: ${agentId}`);}}finally{store.close();}const bundle=await generateContext(cwd,task,agent);await saveContextArtifact(cwd,bundle);if(args.includes('--json'))return console.log(JSON.stringify(bundle,null,2));console.log(`TASK CONTEXT ${bundle.id}\nTask        ${bundle.task}\nSemantic    ${bundle.semantic.nodes.length} nodes / ${bundle.semantic.edges.length} edges\nMemory      ${bundle.memory.length}\nOperations  ${bundle.recentOperations.length}\nConstraints ${bundle.constraints.length}\nDigest      ${bundle.sourceDigest}`);}
 
-async function generateContext(cwd:string,task:string,agent?:AgentProfile):Promise<TaskContextBundle>{const ir=await loadIR(cwd);const store=await LocalStateStore.open(cwd);try{return buildTaskContext({task,...(agent?{agent}:{}),ir,memory:store.listMemory(),operations:store.listOperations()});}finally{store.close();}}
+async function generateContext(cwd:string,task:string,agent?:AgentProfile):Promise<TaskContextBundle>{const ir=await loadIR(cwd);const store=await LocalStateStore.open(cwd);try{const bundle=buildTaskContext({task,...(agent?{agent}:{}),ir,memory:store.listMemory(),operations:store.listOperations()});const bindingPath=join(cwd,'.senten','git-binding.json');let gitBinding:unknown=undefined;if(await exists(bindingPath)){try{gitBinding=JSON.parse(await readFile(bindingPath,'utf8'));}catch{}}return{...bundle,metadata:{...(bundle.metadata??{}),...(gitBinding?{gitBinding}:{}),contextPolicy:'project-scoped; credentials excluded'}};}finally{store.close();}}
 async function saveContextArtifact(cwd:string,bundle:TaskContextBundle):Promise<void>{const dir=join(cwd,'.senten','artifacts','contexts');await mkdir(dir,{recursive:true});await writeFile(join(dir,`${bundle.id}.json`),JSON.stringify(bundle,null,2)+'\n');}
 
 function commandsCommand(registry:ExtensionRegistry,args:string[]):void{const rows:Array<{name:string;capability:string;source:string}>=CORE_COMMANDS.map(name=>({name,capability:commandCapability(name),source:'core'}));for(const ext of registry.list())for(const c of ext.commands??[])rows.push({name:`${ext.namespace} ${c.path}`,capability:c.capability??ext.capabilities[0]??`extension.${ext.namespace}`,source:ext.namespace});if(args.includes('--json')||flagValue(args,'--format')==='json')console.log(JSON.stringify(rows,null,2));else for(const r of rows)console.log(`${r.name.padEnd(32)} ${r.capability.padEnd(24)} ${r.source}`);}
-function mcpCommand(registry:ExtensionRegistry,args:string[]):void{if((args[0]??'schema')!=='schema')throw new Error('Usage: senten mcp schema');const core=['inspect','explain','graph','impact','discover','drift','runtime','evidence','guarantee','assurance','launchproof','proof','report','context','workflow','sandbox','crawl','clickthru','journey'];const tools=core.map(name=>({name:`senten_${name.replaceAll('-','_')}`,description:`Senten ${name} operation`,inputSchema:{type:'object',properties:{args:{type:'array',items:{type:'string'}}}},metadata:{capability:commandCapability(name)}}));for(const ext of registry.list())for(const c of ext.commands??[])tools.push({name:`senten_${ext.namespace}_${c.path.replaceAll(/[^a-zA-Z0-9]+/g,'_')}`,description:c.description??`${ext.namespace} ${c.path}`,inputSchema:{type:'object',properties:{args:{type:'array',items:{type:'string'}}}},metadata:{capability:c.capability??ext.capabilities[0]??`extension.${ext.namespace}`}});console.log(JSON.stringify({schemaVersion:'0.1',transport:'stdio-ready',tools},null,2));}
+async function mcpCommand(registry:ExtensionRegistry,args:string[]):Promise<void>{
+  const action=args[0]??'schema';
+  const core=['inspect','explain','why','graph','impact','adopt','declare','relate','lineage','discover','drift','source','diff','paths','doctor','proof','guarantee','capability','simulate','compatibility','runtime','evidence','assurance','launchproof','context','workflow','sandbox','crawl','clickthru','journey'];
+  const safeRead=new Set(['inspect','explain','why','graph','impact','lineage','drift','source','diff','paths','doctor','proof','guarantee','compatibility']);
+  const commands=core.map(name=>({name,description:`Senten ${name} operation`,capability:commandCapability(name),mutating:!safeRead.has(name)}));
+  for(const ext of registry.list())for(const c of ext.commands??[])commands.push({name:`${ext.namespace}_${c.path}`,description:c.description??`${ext.namespace} ${c.path}`,capability:c.capability??ext.capabilities[0]??`extension.${ext.namespace}`,mutating:true});
+  const tools=buildMcpToolDefinitions(commands);
+  if(action==='schema'){console.log(JSON.stringify({schemaVersion:'0.2',protocol:'MCP',transport:'stdio',defaultPolicy:'read-only',tools},null,2));return;}
+  if(action==='serve'){
+    const entrypoint=process.argv[1];if(!entrypoint)throw new Error('Unable to resolve Senten CLI entrypoint for MCP transport.');
+    const allowWrite=args.includes('--allow-write');const timeoutMs=parseDurationMs(flagValue(args,'--timeout'))??30_000;const maxOutputBytes=parseSize(flagValue(args,'--max-output')??'1mb');
+    await runMcpStdioServer({cwd:process.cwd(),entrypoint,tools,allowWrite,allowLiveEffects:args.includes('--allow-live-effects'),timeoutMs,maxOutputBytes});return;
+  }
+  throw new Error('Usage: senten mcp <schema|serve> [--allow-write] [--allow-live-effects] [--timeout 30s] [--max-output 1mb]');
+}
 
 async function makeOperation(cwd:string,input:{action:string;intent:string;targets:string[];dryRun:boolean;rollback:RollbackRecipe;reversibility:OperationRecord['reversibility'];actor:ActorIdentity}):Promise<OperationRecord>{const store=await LocalStateStore.open(cwd);try{const sessionId=store.get('session.active'); const transactionId=store.get('transaction.active'); const branch=gitBranch(cwd); const commit=gitCommit(cwd); return{id:`op_${randomUUID().slice(0,8)}`,timestamp:new Date().toISOString(),actor:input.actor,intent:input.intent,action:input.action,targets:input.targets,environment:(await loadConfig(cwd)).environment??'development',dryRun:input.dryRun,status:input.dryRun?'planned':'applied',reversibility:input.reversibility,rollback:input.rollback,...(sessionId?{sessionId}:{}),...(transactionId?{transactionId}:{}),...(branch?{branch}:{}),...(commit?{gitCommit:commit}:{})};}finally{store.close();}}
 async function recordOperation(cwd:string,op:OperationRecord):Promise<void>{const store=await LocalStateStore.open(cwd);try{store.putOperation(op);store.appendEvent(eventFor(op.dryRun?'operation.planned':'operation.applied',op.id,op.actor));if(op.transactionId){const tx=store.getTransaction(op.transactionId);if(tx)store.putTransaction({...tx,operationIds:[...tx.operationIds,op.id]});}}finally{store.close();}}
@@ -941,6 +1009,67 @@ function pathsOverlap(a:string,b:string):boolean{const na=a.replaceAll('\\','/')
 function resolveSince(value:string):Date{if(/^\d+(m|h|d)$/.test(value)){const n=Number(value.slice(0,-1)),u=value.at(-1)!;const ms=u==='m'?n*60000:u==='h'?n*3600000:n*86400000;return new Date(Date.now()-ms);}const d=new Date(value);if(Number.isNaN(d.valueOf()))throw new Error(`Invalid --since value: ${value}`);return d;}
 async function applyRollback(cwd:string,rollback:RollbackRecipe):Promise<void>{if(rollback.type==='move'){const from=resolveElementPath(cwd,rollback.from),to=resolveElementPath(cwd,rollback.to);if(!await exists(from))throw new Error(`Rollback source no longer exists: ${rollback.from}`);if(await exists(to))throw new Error(`Rollback destination already exists: ${rollback.to}`);await mkdir(dirname(to),{recursive:true});await rename(from,to);return;}if(rollback.type==='delete-created'){const path=resolveElementPath(cwd,rollback.path);if(!await exists(path))return;if(rollback.expectedHash&&await hashPath(path)!==rollback.expectedHash)throw new Error(`Refusing rollback because ${rollback.path} changed since creation.`);await rm(path,{recursive:true,force:true});return;}if(rollback.type==='restore-file'){const path=resolveElementPath(cwd,rollback.path);if(await exists(path))throw new Error(`Refusing to overwrite existing file during rollback: ${rollback.path}`);await mkdir(dirname(path),{recursive:true});await writeFile(path,Buffer.from(rollback.contentBase64,'base64'));}}
 
+
+async function adoptCommand(cwd:string,args:string[]):Promise<void>{
+  if(!await exists(join(cwd,'senten.config.json')))await initProject(cwd,[]); let ir=await loadIR(cwd);
+  if(!args.includes('--no-discover')){const discovered=await discoverSourceProject(cwd,ir.application,ir,{force:args.includes('--force'),analyzers:defaultRegistry().sourceAnalyzers()}); const manualNodes=ir.nodes.filter(n=>n.metadata?.discoveredBy!=='source-intelligence'); const manualEdges=ir.edges.filter(e=>e.metadata?.discoveredBy!=='source-intelligence'); ir={...discovered.ir,nodes:[...manualNodes,...discovered.ir.nodes.filter(n=>!manualNodes.some(m=>m.id===n.id))],edges:[...manualEdges,...discovered.ir.edges]}; await writeIR(cwd,ir);}
+  const report=await analyzeAdoption(cwd,ir); await mkdir(join(cwd,'.senten','artifacts'),{recursive:true}); const out=join(cwd,'.senten','artifacts','adoption-report.json'); await writeFile(out,JSON.stringify(report,null,2)+'\n');
+  if(args.includes('--json'))return console.log(JSON.stringify(report,null,2));
+  console.log(`SENTEN ADOPT\nApplication   ${report.application.name}\nReadiness     ${report.readiness.status} (${report.readiness.score}/100)\nWorkspace     ${report.workspace.kind}${report.workspace.packageManager?` / ${report.workspace.packageManager}`:''}\nSemantic      ${report.coverage.semantic}%\nOperational   ${report.coverage.operational}%\nFiles         ${report.summary.files}\nRoutes        ${report.summary.routes}\nActions       ${report.summary.actions}\nResources     ${report.summary.resources}\nProviders     ${report.summary.providers}\nTests         ${report.summary.tests}\nSignals       ${report.signals.length}\nGaps          ${report.gaps.length}\nArtifact      ${relative(cwd,out)}`);
+  if(report.signals.length){console.log('\nSignals');for(const x of report.signals)console.log(`  ${x.category.padEnd(11)} ${x.label} [${x.confidence}]`);} if(report.gaps.length){console.log('\nAdoption gaps');for(const x of report.gaps)console.log(`  ${x.severity.toUpperCase().padEnd(8)} ${x.message}`);} if(report.recommendations.length){console.log('\nNext architecture work');for(const x of report.recommendations)console.log(`  - ${x}`);}
+  if(args.includes('--strict')&&report.gaps.some(g=>g.severity==='critical'))process.exitCode=1;
+}
+
+
+async function declareCommand(cwd:string,args:string[]):Promise<void>{
+  await requireInitialized(cwd); const kind=args[0] as SemanticNode['kind']|undefined; const rawId=args[1]; if(!kind||!rawId)throw new Error('Usage: senten declare <resource|action|policy|invariant|capability|event|state|feature|actor|provider> <id> [--label text] [--source file]');
+  const allowed:SemanticNode['kind'][]=['resource','action','policy','invariant','capability','event','state','feature','actor','provider','query','effect','ui']; if(!allowed.includes(kind))throw new Error(`Unsupported declarative semantic kind: ${kind}`);
+  const id=rawId.startsWith(`${kind}:`)?rawId:`${kind}:${rawId}`; const ir=await loadIR(cwd); if(ir.nodes.some(n=>n.id===id))throw new Error(`Semantic node already exists: ${id}`); const label=flagValue(args,'--label')??rawId; const source=flagValue(args,'--source'); const node:SemanticNode={id,kind,label,...(source?{source}:{}),metadata:{declaredBy:'senten-cli',declaredAt:new Date().toISOString()}}; ir.nodes.push(node); ir.generatedAt=new Date().toISOString(); await writeIR(cwd,ir); console.log(`DECLARED ${id}\nLabel   ${label}${source?`\nSource  ${source}`:''}`);
+}
+
+async function relateCommand(cwd:string,args:string[]):Promise<void>{
+  await requireInitialized(cwd); const [fromRaw,relation,toRaw]=args; if(!fromRaw||!relation||!toRaw)throw new Error('Usage: senten relate <from> <relation> <to>'); const ir=await loadIR(cwd); const from=resolveSemanticRef(fromRaw,ir.nodes),to=resolveSemanticRef(toRaw,ir.nodes); if(!ir.nodes.some(n=>n.id===from))throw new Error(`Unknown semantic source: ${fromRaw}`); if(!ir.nodes.some(n=>n.id===to))throw new Error(`Unknown semantic target: ${toRaw}`); if(ir.edges.some(e=>e.from===from&&e.to===to&&e.relation===relation)){console.log(`RELATION EXISTS ${from} --${relation}--> ${to}`);return;} ir.edges.push({from,to,relation,metadata:{declaredBy:'senten-cli',declaredAt:new Date().toISOString()}}); ir.generatedAt=new Date().toISOString(); await writeIR(cwd,ir); console.log(`RELATED ${from} --${relation}--> ${to}`);
+}
+
+async function whyCommand(cwd:string,args:string[]):Promise<void>{
+  await requireInitialized(cwd); const target=args[0]; if(!target)throw new Error('Usage: senten why <element>'); const ir=await loadIR(cwd); const id=resolveSemanticRef(target,ir.nodes); const node=ir.nodes.find(n=>n.id===id); if(!node)throw new Error(`Semantic element not found: ${target}`);
+  const incoming=ir.edges.filter(e=>e.to===id); const outgoing=ir.edges.filter(e=>e.from===id); const relatedMemory=await (async()=>{const store=await LocalStateStore.open(cwd);try{return store.listMemory().filter(m=>m.subject===id||m.subject===target||m.value.includes(id)).slice(-10);}finally{store.close();}})();
+  if(args.includes('--json'))return console.log(JSON.stringify({node,incoming,outgoing,memory:relatedMemory},null,2));
+  console.log(`WHY ${id}\nKind    ${node.kind}\nLabel   ${node.label??'-'}\nSource  ${node.source??'-'}\n\nIncoming`); if(!incoming.length)console.log('  none'); for(const e of incoming)console.log(`  ${e.from} --${e.relation}--> ${e.to}`); console.log('\nOutgoing'); if(!outgoing.length)console.log('  none'); for(const e of outgoing)console.log(`  ${e.from} --${e.relation}--> ${e.to}`); if(relatedMemory.length){console.log('\nDecisions / memory');for(const m of relatedMemory)console.log(`  ${m.kind}:${m.subject??'-'} ${m.value}`);}
+}
+
+
+async function lineageCommand(cwd:string,args:string[]):Promise<void>{
+  await requireInitialized(cwd);const target=args[0];if(!target)throw new Error('Usage: senten lineage <element> [--depth N] [--json]');const ir=await loadIR(cwd);const root=resolveSemanticRef(target,ir.nodes);if(!ir.nodes.some(n=>n.id===root))throw new Error(`Semantic element not found: ${target}`);const maxDepth=Math.max(1,Math.min(12,Number(flagValue(args,'--depth')??4)));const preferred=new Set(['reads','writes','requires','preserves','emits','consumes','produces','uses','uses-package','dispatches','implemented-by','defined-in']);const visited=new Set([root]);let frontier=[root];const paths:Array<{depth:number;from:string;relation:string;to:string;direction:'out'|'in'}>=[];for(let depth=1;depth<=maxDepth&&frontier.length;depth++){const next:string[]=[];for(const current of frontier){for(const e of ir.edges){if(!preferred.has(e.relation))continue;let candidate:string|undefined,direction:'out'|'in'|undefined;if(e.from===current){candidate=e.to;direction='out';}else if(e.to===current){candidate=e.from;direction='in';}if(!candidate||visited.has(candidate)||!direction)continue;visited.add(candidate);next.push(candidate);paths.push({depth,from:e.from,relation:e.relation,to:e.to,direction});}}frontier=next;}const result={root,maxDepth,paths,nodes:[...visited].map(id=>ir.nodes.find(n=>n.id===id)).filter(Boolean)};if(args.includes('--json'))return console.log(JSON.stringify(result,null,2));console.log(`LINEAGE ${root}\nDepth ${maxDepth}\nReach  ${visited.size-1}`);for(const p of paths)console.log(`  ${'  '.repeat(p.depth-1)}${p.from} --${p.relation}--> ${p.to}`);
+}
+
+interface StoredCapabilityConfig { providers:CapabilityProvider[]; budgets:Record<string,OperationalBudget>; }
+async function loadCapabilityConfig(cwd:string):Promise<StoredCapabilityConfig>{const path=join(cwd,'.senten','capabilities.json');if(!await exists(path))return{providers:[],budgets:{}};return JSON.parse(await readFile(path,'utf8')) as StoredCapabilityConfig;}
+async function saveCapabilityConfig(cwd:string,value:StoredCapabilityConfig):Promise<void>{await mkdir(join(cwd,'.senten'),{recursive:true});await writeFile(join(cwd,'.senten','capabilities.json'),JSON.stringify(value,null,2)+'\n');}
+async function capabilityCommand(cwd:string,args:string[]):Promise<void>{
+  await requireInitialized(cwd); const action=args[0]??'list'; const cfg=await loadCapabilityConfig(cwd);
+  if(action==='register'){const capability=args[1],id=args[2];if(!capability||!id)throw new Error('Usage: senten capability register <capability> <provider> [--priority N]');if(cfg.providers.some(p=>p.capability===capability&&p.id===id))throw new Error(`Provider already registered: ${capability}/${id}`);cfg.providers.push({capability,id,priority:Number(flagValue(args,'--priority')??0),metadata:{configuredBy:'senten-cli'}});await saveCapabilityConfig(cwd,cfg);console.log(`REGISTERED ${capability} -> ${id}`);return;}
+  if(action==='budget'){const capability=args[1];if(!capability)throw new Error('Usage: senten capability budget <capability> [--latency-ms N] [--calls N] [--cost-usd N] [--tokens N]');const b:OperationalBudget={};const lat=flagValue(args,'--latency-ms'),calls=flagValue(args,'--calls'),cost=flagValue(args,'--cost-usd'),tokens=flagValue(args,'--tokens');if(lat)b.maxLatencyMs=Number(lat);if(calls)b.maxCalls=Number(calls);if(cost)b.maxCostUsd=Number(cost);if(tokens)b.maxTokens=Number(tokens);cfg.budgets[capability]=b;await saveCapabilityConfig(cwd,cfg);console.log(`BUDGET ${capability} ${JSON.stringify(b)}`);return;}
+  if(action==='check'){const capability=args[1];if(!capability)throw new Error('Usage: senten capability check <capability> [usage flags]');const registry=new CapabilityRegistry();for(const p of cfg.providers)registry.register(p);const selected=await registry.select(capability);const usage:BudgetUsage={};const lat=flagValue(args,'--latency-ms'),calls=flagValue(args,'--calls'),cost=flagValue(args,'--cost-usd'),tokens=flagValue(args,'--tokens');if(lat)usage.latencyMs=Number(lat);if(calls)usage.calls=Number(calls);if(cost)usage.costUsd=Number(cost);if(tokens)usage.tokens=Number(tokens);const budget=evaluateBudget(cfg.budgets[capability]??{},usage);console.log(`CAPABILITY ${capability}\nStatus    ${selected.status}\nProvider  ${selected.provider?.id??'-'}\nReason    ${selected.reason}\nBudget    ${budget.ok?'PASS':'FAIL'}`);for(const v of budget.violations)console.log(`  ! ${v}`);if(selected.status==='unavailable'||!budget.ok)process.exitCode=1;return;}
+  if(args.includes('--json'))return console.log(JSON.stringify(cfg,null,2));console.log('CAPABILITIES');if(!cfg.providers.length)console.log('  none registered');for(const p of cfg.providers)console.log(`  ${p.capability.padEnd(16)} ${p.id} priority=${p.priority??0}${cfg.budgets[p.capability]?` budget=${JSON.stringify(cfg.budgets[p.capability])}`:''}`);
+}
+
+async function simulateCommand(cwd:string,args:string[]):Promise<void>{
+  await requireInitialized(cwd); const action=args[0]; const dir=join(cwd,'.senten','simulations');
+  if(action==='list'){
+    if(!await exists(dir)){console.log('No simulation plans.');return;}
+    const files=(await readdir(dir)).filter(x=>x.endsWith('.json')).sort();if(!files.length){console.log('No simulation plans.');return;}
+    const rows=[] as Array<Record<string,unknown>>;for(const file of files){try{rows.push(JSON.parse(await readFile(join(dir,file),'utf8')) as Record<string,unknown>);}catch{}}
+    if(args.includes('--json'))return console.log(JSON.stringify(rows,null,2));for(const row of rows)console.log(`${String(row.id??'unknown').padEnd(16)} ${String(row.fault??'unknown').padEnd(10)} ${String(row.target??'application')}  ${String(row.environment??'sandbox')}`);return;
+  }
+  if(action==='inspect'){
+    const id=args[1];if(!id)throw new Error('Usage: senten simulate inspect <id>');const file=join(dir,`${id}.json`);if(!await exists(file))throw new Error(`Simulation plan not found: ${id}`);const plan=JSON.parse(await readFile(file,'utf8')) as Record<string,unknown>;if(args.includes('--json'))return console.log(JSON.stringify(plan,null,2));console.log(`SIMULATION PLAN ${plan.id}\nFault        ${plan.fault}\nTarget       ${plan.target}\nValue        ${plan.value??'-'}\nEnvironment  ${plan.environment}\nMode         ${plan.mode}\nCreated      ${plan.createdAt}\nSafety       isolated execution required`);return;
+  }
+  const fault=action; if(!fault)throw new Error('Usage: senten simulate <network|provider|latency|error|resource|list|inspect> [--target <element>] [--value <value>]'); const allowed=['network','provider','latency','error','resource'];if(!allowed.includes(fault))throw new Error(`Unsupported safe simulation fault: ${fault}`);const plan={id:`sim_${randomUUID().slice(0,10)}`,fault,target:flagValue(args,'--target')??'application',value:flagValue(args,'--value')??null,environment:flagValue(args,'--env')??'sandbox',createdAt:new Date().toISOString(),mode:'declarative',note:'This plan does not alter production. Execute only through an isolated sandbox provider.'};await mkdir(dir,{recursive:true});await writeFile(join(dir,`${plan.id}.json`),JSON.stringify(plan,null,2)+'\n');if(args.includes('--json'))return console.log(JSON.stringify(plan,null,2));console.log(`SIMULATION PLAN ${plan.id}\nFault        ${plan.fault}\nTarget       ${plan.target}\nEnvironment  ${plan.environment}\nMode         ${plan.mode}\nSafety       isolated execution required`);
+}
+
+async function compatibilityCommand(cwd:string,args:string[]):Promise<void>{await requireInitialized(cwd);const ir=await loadIR(cwd);const store=await LocalStateStore.open(cwd);let schema='unknown';try{schema=String(store.schemaVersion());}finally{store.close();}const report=compatibilityReport(ir,schema);if(args.includes('--json'))return console.log(JSON.stringify(report,null,2));console.log(`SENTEN COMPATIBILITY\nApplication IR      ${report.irSchema}\nIR support          ${report.supportedIrSchemas.join(', ')}\nCommand schema      ${report.contracts.commandSchema}\nExtension protocol  ${report.contracts.extensionProtocol}\nRegistry protocol   ${report.contracts.registryProtocol}\nState schema        ${report.contracts.stateSchema}\nResult              ${report.compatible?'PASS':'FAIL'}`);for(const w of report.warnings)console.log(`  ! ${w}`);if(!report.compatible)process.exitCode=1;}
+
 async function inspectFsElement(cwd:string,path:string,raw:string):Promise<void>{if(!await exists(path))throw new Error(`Element does not exist: ${raw}`);const info=await stat(path);console.log(`ELEMENT\nTarget    ${raw}\nPath      ${relative(cwd,path)||'.'}\nKind      ${info.isDirectory()?'directory':'file'}\nSize      ${info.size}\nModified  ${info.mtime.toISOString()}`);}
 async function normalizeDestination(cwd:string,source:string,destination:string):Promise<string>{const dest=resolveElementPath(cwd,destination);const explicitlyDirectory=destination.endsWith('/')||destination.endsWith('\\');if(explicitlyDirectory)return join(dest,basename(source));if(await exists(dest)){const info=await stat(dest);if(info.isDirectory())return join(dest,basename(source));}return dest;}
 function resolveElementPath(cwd:string,id:string):string{const path=resolve(cwd,id),root=resolve(cwd),rel=relative(root,path);if(rel==='..'||rel.startsWith(`..${process.platform==='win32'?'\\':'/'}`))throw new Error('Element path escapes the project root.');return path;}
@@ -960,6 +1089,8 @@ function flagValue(args:string[],name:string):string|undefined{const i=args.inde
 async function expireSandboxes(store:LocalStateStore):Promise<void>{for(const sbx of store.listSandboxes())if(sbx.status==='active'&&await expiredSandbox(sbx)){try{const p=await providerFor(sbx.provider);const h=await p.open(sbx);await h.destroy();}catch{}store.putSandbox({...sbx,status:'expired'});}}
 function multiFlagValues(args:string[],flag:string):string[]{const out:string[]=[];for(let i=0;i<args.length;i++)if(args[i]===flag&&args[i+1])out.push(args[++i]!);return out;}
 function parseDurationMs(value?:string):number|undefined{if(!value)return undefined;if(/^\d+$/.test(value))return Number(value);const m=value.match(/^(\d+)(ms|s|m|h|d)$/);if(!m)throw new Error(`Invalid duration: ${value}`);const n=Number(m[1]);return n*({ms:1,s:1000,m:60_000,h:3_600_000,d:86_400_000} as Record<string,number>)[m[2]!]!;}
+function deviceViewport(value?:string):string|undefined{if(!value)return undefined;const presets:Record<string,string>={mobile:'390x844',tablet:'820x1180',desktop:'1440x900'};return presets[value.toLowerCase()];}
+function parseViewport(value?:string):{width:number;height:number;label?:string}|undefined{if(!value)return undefined;const m=value.match(/^(\d+)x(\d+)$/i);if(!m)throw new Error(`Invalid viewport: ${value}. Use WIDTHxHEIGHT.`);return{width:Number(m[1]),height:Number(m[2])};}
 function parseSize(value:string):number{const m=value.match(/^(\d+)(b|kb|mb)?$/i);if(!m)throw new Error(`Invalid size: ${value}`);const n=Number(m[1]),u=(m[2]??'b').toLowerCase();return n*(u==='mb'?1024*1024:u==='kb'?1024:1);}
 function parseFlags(args:string[]):Record<string,string|boolean>{const flags:Record<string,string|boolean>={};for(let i=0;i<args.length;i++)if(args[i]!.startsWith('--')){const key=args[i]!.slice(2),next=args[i+1];flags[key]=next&&!next.startsWith('--')?next:true;if(typeof flags[key]==='string')i++;}return flags;}
 function parseVars(args:string[]):Record<string,string>{const vars:Record<string,string>={};for(let i=0;i<args.length;i++)if(args[i]==='--var'&&args[i+1]){const [k,...rest]=args[i+1]!.split('=');if(k)vars[k]=rest.join('=');i++;}return vars;}
@@ -969,6 +1100,33 @@ function slug(input:string):string{return input.toLowerCase().replace(/[^a-z0-9]
 function countBy<T>(items:T[],key:(item:T)=>string):Record<string,number>{const out:Record<string,number>={};for(const item of items)out[key(item)]=(out[key(item)]??0)+1;return out;}
 function gitBranch(cwd:string):string|undefined{const r=spawnSync('git',['branch','--show-current'],{cwd,encoding:'utf8'});return r.status===0&&r.stdout.trim()?r.stdout.trim():undefined;}
 function gitCommit(cwd:string):string|undefined{const r=spawnSync('git',['rev-parse','HEAD'],{cwd,encoding:'utf8'});return r.status===0&&r.stdout.trim()?r.stdout.trim():undefined;}
+
+async function scenarioCommand(cwd:string,args:string[]):Promise<void>{
+  const action=args[0]??'list';
+  if(action==='list'){
+    const rows=await listScenarios(cwd);if(args.includes('--json'))return console.log(JSON.stringify(rows,null,2));
+    console.log('SENTEN SCENARIO LAB');for(const row of rows)console.log(`${row.id.padEnd(30)} ${row.title}`);return;
+  }
+  if(action==='run'||action==='verify'){
+    const id=args[1];if(!id)throw new Error('Usage: senten scenario run <id> [--json]');const result=await runScenario(cwd,id);
+    if(args.includes('--json'))console.log(JSON.stringify(result,null,2));else{console.log(`SCENARIO ${result.scenario.id}\n${result.scenario.title}\nResult      ${result.passed?'PASS':'FAIL'}\nFrameworks  ${result.frameworks.join(', ')||'none'}\nReadiness   ${result.adoption.readiness.status} (${result.adoption.readiness.score}/100)\nNodes       ${result.ir.nodes.length}\nEdges       ${result.ir.edges.length}\nGaps        ${result.adoption.gaps.length}`);for(const f of result.failures)console.log(`  ! ${f}`);}
+    if(!result.passed)process.exitCode=1;return;
+  }
+  if(action==='verify-all'){
+    const rows=await listScenarios(cwd);let failed=0;for(const row of rows){const result=await runScenario(cwd,row.id);console.log(`${result.passed?'✓':'✕'} ${row.id}${result.failures.length?` — ${result.failures.join('; ')}`:''}`);if(!result.passed)failed++;}console.log(`Scenarios ${rows.length}\nPassed    ${rows.length-failed}\nFailed    ${failed}`);if(failed)process.exitCode=1;return;
+  }
+  if(action==='export'){
+    const out=resolve(cwd,flagValue(args,'--output')??'apps/showcase/data');const result=await exportScenarioArtifacts(cwd,out);console.log(`SCENARIO ARTIFACTS\nScenarios ${result.count}\nFailed    ${result.failed}\nIndex     ${relative(cwd,result.index)}`);if(result.failed)process.exitCode=1;return;
+  }
+  throw new Error('Usage: senten scenario <list|run|verify-all|export>');
+}
+
+async function showcaseCommand(cwd:string,args:string[]):Promise<void>{
+  const action=args[0]??'build';if(action!=='build')throw new Error('Usage: senten showcase build [--output showcase/data]');
+  const out=resolve(cwd,flagValue(args,'--output')??'apps/showcase/data');const result=await exportScenarioArtifacts(cwd,out);
+  console.log(`SENTEN SHOWCASE\nArtifacts  ${result.count}\nFailed     ${result.failed}\nOutput     ${relative(cwd,out)}\nMode       precomputed real Senten analysis`);if(result.failed)process.exitCode=1;
+}
+
 function suggestCommand(input:string,commands:string[]):string|undefined{let best:string|undefined,bestScore=Infinity;for(const c of commands){const d=levenshtein(input,c);if(d<bestScore){best=c;bestScore=d;}}return bestScore<=Math.max(2,Math.floor(input.length/3))?best:undefined;}
 function levenshtein(a:string,b:string):number{const prev=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){let diag=prev[0]!,left=i;prev[0]=i;for(let j=1;j<=b.length;j++){const up=prev[j]!;const next=Math.min(up+1,left+1,diag+(a[i-1]===b[j-1]?0:1));diag=up;prev[j]=next;left=next;}}return prev[b.length]!;}
 function nodeAtLeast(major:number,minor:number):boolean{const [a,b]=process.versions.node.split('.').map(Number);return (a??0)>major||((a??0)===major&&(b??0)>=minor);}

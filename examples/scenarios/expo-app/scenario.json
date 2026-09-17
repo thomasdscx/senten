@@ -1,0 +1,1 @@
+{"id":"expo-app","title":"Expo application","description":"Expo Router application fixture.","application":{"id":"expo-app","name":"Expo App"},"expectations":{"frameworks":["expo","react"],"requiredNodeIds":["invariant:mobile.navigation"]}}

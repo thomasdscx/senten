@@ -29,7 +29,7 @@ const manifest={
   schemaVersion:1,
   name:pkg.name,
   version:pkg.version,
-  channel:pkg.version.includes('-alpha.')?'alpha':pkg.version.includes('-beta.')?'beta':'stable',
+  channel:pkg.version.includes('-alpha.')?'alpha':pkg.version.includes('-beta.')?'beta':pkg.version.includes('-rc.')?'rc':'stable',
   generatedAt:new Date().toISOString(),
   node:process.version,
   artifacts:[{file:basename(destination),type:'npm-tarball',sha256,size:bytes.length}],

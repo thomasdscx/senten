@@ -1,0 +1,1 @@
+{"schemaVersion":"0.1","nodes":[{"id":"policy:health.read","kind":"policy"},{"id":"invariant:health.available","kind":"invariant"}],"edges":[]}

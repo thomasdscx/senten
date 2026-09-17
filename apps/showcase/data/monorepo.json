@@ -1,0 +1,154 @@
+{
+  "schemaVersion": "0.1",
+  "generatedAt": "2026-09-16T21:38:11.235Z",
+  "scenario": {
+    "id": "monorepo",
+    "title": "Workspace monorepo",
+    "description": "An npm workspace used to validate multi-package adoption.",
+    "application": {
+      "id": "monorepo",
+      "name": "Monorepo"
+    },
+    "expectations": {
+      "frameworks": [
+        "react"
+      ],
+      "requiredNodeIds": [
+        "invariant:workspace.boundary"
+      ]
+    }
+  },
+  "frameworks": [
+    "react"
+  ],
+  "passed": true,
+  "failures": [],
+  "adoption": {
+    "generatedAt": "2026-09-16T21:38:11.235Z",
+    "application": {
+      "id": "monorepo",
+      "name": "Monorepo"
+    },
+    "summary": {
+      "files": 1,
+      "routes": 0,
+      "actions": 1,
+      "resources": 0,
+      "providers": 0,
+      "tests": 0
+    },
+    "signals": [
+      {
+        "id": "framework.react",
+        "category": "framework",
+        "label": "React",
+        "evidence": [
+          "package:react@19.0.0"
+        ],
+        "confidence": "high"
+      }
+    ],
+    "gaps": [
+      {
+        "id": "testing.no-linked-tests",
+        "severity": "warning",
+        "category": "testing",
+        "message": "No tests are represented in the semantic graph.",
+        "evidence": []
+      },
+      {
+        "id": "operations.no-ci",
+        "severity": "warning",
+        "category": "operations",
+        "message": "No GitHub Actions workflows were detected.",
+        "evidence": []
+      }
+    ],
+    "recommendations": [
+      "Add or improve framework adapters so externally reachable routes are represented.",
+      "Declare authorization/security policies for privileged actions and routes.",
+      "Connect test files to guarantees and critical routes/actions.",
+      "Add a deterministic pre-release workflow and CI integration."
+    ],
+    "coverage": {
+      "semantic": 17,
+      "operational": 25
+    },
+    "readiness": {
+      "status": "early",
+      "score": 1
+    },
+    "workspace": {
+      "kind": "npm-workspaces",
+      "packageManager": "npm@10.9.2"
+    }
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "application:monorepo",
+        "kind": "application",
+        "label": "Monorepo",
+        "metadata": {
+          "source": "senten"
+        }
+      },
+      {
+        "id": "file:packages/core/index.ts",
+        "kind": "file",
+        "label": "packages/core/index.ts",
+        "source": "packages/core/index.ts",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "hash": "d923a8b703f63c4f13146815c2acad068fc7a852c10b71ac900bc0690eaade6a",
+          "language": "typescript",
+          "loc": 2,
+          "test": false,
+          "frameworks": []
+        }
+      },
+      {
+        "id": "action:createWidget@packages/core/index.ts",
+        "kind": "action",
+        "label": "createWidget",
+        "source": "packages/core/index.ts",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "symbolKind": "function",
+          "exported": true,
+          "line": 1,
+          "async": false
+        }
+      },
+      {
+        "id": "invariant:workspace.boundary",
+        "kind": "invariant",
+        "metadata": {
+          "declaredBy": "architecture-manifest"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "application:monorepo",
+        "to": "file:packages/core/index.ts",
+        "relation": "contains",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "action:createWidget@packages/core/index.ts",
+        "to": "file:packages/core/index.ts",
+        "relation": "defined-in",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      }
+    ]
+  }
+}

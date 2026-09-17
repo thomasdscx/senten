@@ -131,3 +131,56 @@ Implemented:
 - alpha/beta/stable channel policy;
 - `senten create sandbox` friendly alias;
 - cross-shell distribution documentation.
+
+## Builds 12–20 — Capability Sprint ✅
+
+Version: `0.20.0-alpha.0`
+
+Implemented cumulatively:
+
+- release/docs hardening and OIDC-shaped npm Trusted Publishing workflow;
+- existing-application adoption analysis with `senten adopt`;
+- richer explicit semantic declaration, relations, `why`, and lineage traversal;
+- provider-neutral Capability Runtime with health, priority, fail-closed degraded behavior and operational budgets;
+- project-scoped Git identity context, Git doctor, agent-context enrichment and multi-agent handoff artifacts;
+- declarative safe simulation plans, list/inspect, responsive Playwright viewport support and horizontal-overflow findings;
+- signed extension ecosystem audit surface;
+- Observatory adoption/integration views and read-only APIs;
+- explicit Application IR / command / extension / registry compatibility reporting;
+- expanded MCP tool schema for the new capability surface;
+- 66 passing automated tests in the build environment after the cumulative sprint.
+
+Still intentionally experimental or externally gated:
+
+- npm Trusted Publishing requires the package's npm-side trusted-publisher mapping before OIDC publishing can be proven;
+- Playwright browser/device behavior requires browser binaries and real application targets for full hands-on validation;
+- declarative simulation plans are not represented as executed fault-injection evidence;
+- the Application IR and public protocols remain alpha and are not yet frozen for 1.0;
+- native standalone binaries and WASM extension execution remain future stabilization work.
+
+
+## Build 21 — Protocol Completion & Security Hardening ✅
+
+Version: `0.21.1-alpha.0`
+
+Implemented:
+
+- formal versioned Application IR Fragment SPI for framework adapters;
+- deterministic fragment validation/merge with stable semantic identity, adapter provenance, limits and collision diagnostics;
+- first-party alpha adapters for Next.js, Expo and Tauri using the fragment SPI;
+- source discovery/adoption integration for adapter fragments without executing repository code;
+- fail-closed sandbox mutation effect boundary with Docker network-deny as the supported deterministic external-network containment mode;
+- explicit live-effects escape hatch recorded in the sandbox run ledger;
+- mutating browser click-through probes hardened behind a second explicit live-effects gate;
+- real MCP stdio JSON-RPC transport with initialize/ping/tools list/tools call;
+- read-only MCP exposure by default, separate write and live-effects gates;
+- MCP request/output/timeout bounds and sanitized child-process environment;
+- Extension Protocol marker advanced to `0.3`;
+- 79 passing automated tests in the build environment.
+
+Externally gated validation still required:
+
+- Docker runtime smoke test on a host with Docker installed;
+- Windows/macOS/Linux GitHub Actions for this exact commit;
+- real Playwright/browser mutation checks against an explicitly authorized disposable target;
+- npm/GHCR publication for `0.21.1-alpha.0` only after those gates pass.

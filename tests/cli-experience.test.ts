@@ -71,3 +71,44 @@ test('CLI exposes a concise first-run welcome surface', async()=>{
   assert.match(source,/Bun      experimental compatibility target/);
   assert.match(source,/✓ Senten initialized/);
 });
+
+test('MCP schema exposes the Build 12-20 command surface', async()=>{
+  const root=await mkdtemp(join(tmpdir(),'senten-mcp-schema-'));
+  try{
+    const result=run(root,['mcp','schema']);
+    assert.equal(result.status,0);
+    const schema=JSON.parse(result.stdout) as {tools:Array<{name:string}>};
+    const names=new Set(schema.tools.map(x=>x.name));
+    for(const name of ['senten_adopt','senten_why','senten_lineage','senten_capability','senten_simulate','senten_compatibility']) assert.ok(names.has(name),name);
+  } finally { await rm(root,{recursive:true,force:true}); }
+});
+
+test('safe simulation plans can be listed and inspected without executing faults', async()=>{
+  const root=await mkdtemp(join(tmpdir(),'senten-sim-cli-'));
+  try{
+    assert.equal(run(root,['init']).status,0);
+    const created=run(root,['simulate','provider','--target','capability:ai','--value','unavailable','--json']);
+    assert.equal(created.status,0);
+    const plan=JSON.parse(created.stdout) as {id:string;mode:string};
+    assert.equal(plan.mode,'declarative');
+    const listed=run(root,['simulate','list','--json']);
+    assert.equal(listed.status,0); assert.match(listed.stdout,new RegExp(plan.id));
+    const inspected=run(root,['simulate','inspect',plan.id,'--json']);
+    assert.equal(inspected.status,0); assert.match(inspected.stdout,/credentials|production/i) === undefined;
+    assert.match(inspected.stdout,/declarative/);
+  } finally { await rm(root,{recursive:true,force:true}); }
+});
+
+test('agent handoff applies target-agent grants and writes a scoped context artifact', async()=>{
+  const root=await mkdtemp(join(tmpdir(),'senten-agent-handoff-'));
+  try{
+    assert.equal(run(root,['init']).status,0);
+    assert.equal(run(root,['agent','create','planner']).status,0);
+    assert.equal(run(root,['agent','create','implementer']).status,0);
+    assert.equal(run(root,['agent','grant','implementer','project.read']).status,0);
+    const result=run(root,['agent','handoff','planner','implementer','--task','inspect architecture','--json']);
+    assert.equal(result.status,0);
+    const handoff=JSON.parse(result.stdout) as {toAgentId:string;permissions:{allow:string[]};policy:string};
+    assert.equal(handoff.toAgentId,'implementer'); assert.ok(handoff.permissions.allow.includes('project.read')); assert.match(handoff.policy,/credentials excluded/);
+  } finally { await rm(root,{recursive:true,force:true}); }
+});

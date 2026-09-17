@@ -1,0 +1,1 @@
+{"id":"tauri-app","title":"Tauri desktop application","description":"Desktop fixture for native invocation discovery.","application":{"id":"tauri-app","name":"Tauri App"},"expectations":{"frameworks":["tauri"],"requiredNodeIds":["policy:native.invoke","invariant:native.invoke-bounded"]}}

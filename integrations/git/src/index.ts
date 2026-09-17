@@ -1,22 +1,18 @@
 import { spawnSync } from 'node:child_process';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { defineSentenExtension } from '../../../packages/extension-sdk/src/index.js';
 
+type Binding={account?:string;identity?:{name?:string;email?:string};remote?:string;repository?:string;permissions?:string[];updatedAt:string};
+async function loadBinding(cwd:string):Promise<Binding|undefined>{try{return JSON.parse(await readFile(join(cwd,'.senten','git-binding.json'),'utf8')) as Binding}catch{return undefined}}
+function git(cwd:string,args:string[]):string|undefined{const r=spawnSync('git',args,{cwd,encoding:'utf8'});return r.status===0?r.stdout.trim():undefined}
+async function context(cwd:string){const binding=await loadBinding(cwd);const remoteName=binding?.remote??'origin';const remote=git(cwd,['remote','get-url',remoteName]);return{binding,branch:git(cwd,['branch','--show-current']),commit:git(cwd,['rev-parse','HEAD']),identity:{name:git(cwd,['config','user.name']),email:git(cwd,['config','user.email'])},remote:{name:remoteName,url:remote},status:git(cwd,['status','--short'])??'',authenticatedIdentity:'host credential manager / SSH is intentionally not introspected'};}
 export const gitIntegration = defineSentenExtension({
-  name: 'Senten Git Integration',
-  namespace: 'git',
-  version: '0.1.5',
-  kind: 'integration',
-  senten: '>=0.1.5',
-  capabilities: ['process.git', 'source.read'],
-  commands: [
-    {
-      path: 'status',
-      description: 'Show Git status through Senten.',
-      run({ cwd }) {
-        const result = spawnSync('git', ['status', '--short', '--branch'], { cwd, encoding: 'utf8' });
-        process.stdout.write(result.stdout || result.stderr);
-        return result.status ?? 1;
-      }
-    }
+  name:'Senten Git Integration',namespace:'git',version:'0.21.0-alpha.0',kind:'integration',senten:'>=0.21.0-alpha.0',capabilities:['process.git','source.read','project.identity'],
+  commands:[
+    {path:'status',description:'Show Git status through Senten.',run({cwd}){const result=spawnSync('git',['status','--short','--branch'],{cwd,encoding:'utf8'});process.stdout.write(result.stdout||result.stderr);return result.status??1;}},
+    {path:'context',description:'Show project-scoped Git identity, binding and remote.',async run({cwd,args}){const value=await context(cwd);if(args.includes('--json'))console.log(JSON.stringify(value,null,2));else console.log(`GIT CONTEXT\nAccount   ${value.binding?.account??'unbound'}\nBranch    ${value.branch??'-'}\nRemote    ${value.remote.name} -> ${value.remote.url??'-'}\nIdentity  ${value.identity.name??'-'} <${value.identity.email??'-'}>\nPolicy    ${(value.binding?.permissions??[]).join(', ')||'not declared'}`);}},
+    {path:'bind',description:'Persist project-scoped Git account/identity binding without storing credentials.',capability:'project.identity',async run({cwd,args}){const account=args[0];if(!account)throw new Error('Usage: senten git bind <account> [--remote origin] [--permission push]');const get=(f:string)=>{const i=args.indexOf(f);return i>=0?args[i+1]:undefined};const permissions:string[]=[];for(let i=0;i<args.length;i++)if(args[i]==='--permission'&&args[i+1])permissions.push(args[++i]!);const name=get('--name')??git(cwd,['config','user.name']);const email=get('--email')??git(cwd,['config','user.email']);const identity:Binding['identity']={...(name?{name}:{}),...(email?{email}:{})};const repository=get('--repository');const binding:Binding={account,remote:get('--remote')??'origin',...(repository?{repository}:{}),identity,permissions,updatedAt:new Date().toISOString()};await mkdir(join(cwd,'.senten'),{recursive:true});await writeFile(join(cwd,'.senten','git-binding.json'),JSON.stringify(binding,null,2)+'\n');console.log(`BOUND ${account}\nRemote      ${binding.remote}\nIdentity    ${binding.identity?.name??'-'} <${binding.identity?.email??'-'}>\nPermissions ${permissions.join(', ')||'none declared'}`);}},
+    {path:'doctor',description:'Detect Git identity/binding mismatches before agent or human changes.',async run({cwd}){const value=await context(cwd);const issues:string[]=[];if(!value.branch)issues.push('not on a named branch');if(!value.remote.url)issues.push('configured remote is unavailable');if(!value.identity.name||!value.identity.email)issues.push('commit identity is incomplete');if(value.binding?.identity?.name&&value.binding.identity.name!==value.identity.name)issues.push(`name mismatch: expected ${value.binding.identity.name}, current ${value.identity.name}`);if(value.binding?.identity?.email&&value.binding.identity.email!==value.identity.email)issues.push(`email mismatch: expected ${value.binding.identity.email}, current ${value.identity.email}`);console.log(`GIT DOCTOR ${issues.length?'FAIL':'PASS'}`);for(const x of issues)console.log(`  ! ${x}`);if(issues.length)return 1;}}
   ]
 });

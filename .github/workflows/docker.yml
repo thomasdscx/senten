@@ -42,6 +42,7 @@ jobs:
             type=ref,event=tag
             type=raw,value=alpha,enable=${{ contains(github.ref_name, '-alpha.') }}
             type=raw,value=beta,enable=${{ contains(github.ref_name, '-beta.') }}
+            type=raw,value=rc,enable=${{ contains(github.ref_name, '-rc.') }}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
       - id: build
         uses: docker/build-push-action@v6

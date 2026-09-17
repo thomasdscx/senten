@@ -1,0 +1,298 @@
+{
+  "schemaVersion": "0.1",
+  "generatedAt": "2026-09-16T21:38:11.232Z",
+  "scenario": {
+    "id": "missing-policy",
+    "title": "Missing authorization policy",
+    "description": "Externally reachable mutation route without a modeled policy.",
+    "application": {
+      "id": "missing-policy",
+      "name": "Missing Policy"
+    },
+    "expectations": {
+      "frameworks": [
+        "next"
+      ],
+      "requiredNodeIds": [
+        "route:/api/invoices/delete",
+        "invariant:tenant.isolation"
+      ],
+      "gapIds": [
+        "security.routes-without-policy"
+      ],
+      "readinessMax": 50
+    }
+  },
+  "frameworks": [
+    "next",
+    "react"
+  ],
+  "passed": true,
+  "failures": [],
+  "adoption": {
+    "generatedAt": "2026-09-16T21:38:11.232Z",
+    "application": {
+      "id": "missing-policy",
+      "name": "Missing Policy"
+    },
+    "summary": {
+      "files": 1,
+      "routes": 1,
+      "actions": 2,
+      "resources": 0,
+      "providers": 0,
+      "tests": 0
+    },
+    "signals": [
+      {
+        "id": "framework.next",
+        "category": "framework",
+        "label": "Next.js",
+        "evidence": [
+          "package:next@16.0.0"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "framework.react",
+        "category": "framework",
+        "label": "React",
+        "evidence": [
+          "package:react@19.0.0"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "routes.discovered",
+        "category": "route",
+        "label": "1 application routes",
+        "evidence": [
+          "route:/api/invoices/delete"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "risk.no-policy-model",
+        "category": "risk",
+        "label": "Routes exist but no explicit Senten policy nodes are declared",
+        "evidence": [
+          "route:/api/invoices/delete"
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "gaps": [
+      {
+        "id": "security.routes-without-policy",
+        "severity": "critical",
+        "category": "security",
+        "message": "Externally reachable routes are present but no explicit policy nodes are modeled.",
+        "evidence": [
+          "route:/api/invoices/delete"
+        ]
+      },
+      {
+        "id": "testing.no-linked-tests",
+        "severity": "warning",
+        "category": "testing",
+        "message": "No tests are represented in the semantic graph.",
+        "evidence": []
+      },
+      {
+        "id": "operations.no-ci",
+        "severity": "warning",
+        "category": "operations",
+        "message": "No GitHub Actions workflows were detected.",
+        "evidence": []
+      }
+    ],
+    "recommendations": [
+      "Declare authorization/security policies for privileged actions and routes.",
+      "Connect test files to guarantees and critical routes/actions.",
+      "Add a deterministic pre-release workflow and CI integration."
+    ],
+    "coverage": {
+      "semantic": 33,
+      "operational": 25
+    },
+    "readiness": {
+      "status": "early",
+      "score": 0
+    },
+    "workspace": {
+      "kind": "single-package"
+    }
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "application:missing-policy",
+        "kind": "application",
+        "label": "Missing Policy",
+        "metadata": {
+          "source": "senten"
+        }
+      },
+      {
+        "id": "file:app/api/invoices/delete/route.ts",
+        "kind": "file",
+        "label": "app/api/invoices/delete/route.ts",
+        "source": "app/api/invoices/delete/route.ts",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "hash": "5ad135a3a187ca1f8f659c0b3c0e009b7dc8701325e8a981f746829c0166d75b",
+          "language": "typescript",
+          "loc": 2,
+          "test": false,
+          "frameworks": []
+        }
+      },
+      {
+        "id": "route:/api/invoices/delete",
+        "kind": "route",
+        "label": "/api/invoices/delete",
+        "source": "app/api/invoices/delete/route.ts",
+        "metadata": {
+          "framework": "next",
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "routeKind": "api",
+          "methods": [
+            "DELETE"
+          ],
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action:DELETE@app/api/invoices/delete/route.ts",
+        "kind": "action",
+        "label": "DELETE",
+        "source": "app/api/invoices/delete/route.ts",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "symbolKind": "function",
+          "exported": true,
+          "line": 1,
+          "async": true
+        }
+      },
+      {
+        "id": "invariant:tenant.isolation",
+        "kind": "invariant",
+        "metadata": {
+          "declaredBy": "architecture-manifest"
+        }
+      },
+      {
+        "id": "action:http/DELETE:/api/invoices/delete",
+        "kind": "action",
+        "label": "DELETE /api/invoices/delete",
+        "source": "app/api/invoices/delete/route.ts",
+        "metadata": {
+          "framework": "next",
+          "httpMethod": "DELETE",
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "application:missing-policy",
+        "to": "file:app/api/invoices/delete/route.ts",
+        "relation": "contains",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "route:/api/invoices/delete",
+        "to": "file:app/api/invoices/delete/route.ts",
+        "relation": "implemented-by",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "action:DELETE@app/api/invoices/delete/route.ts",
+        "to": "file:app/api/invoices/delete/route.ts",
+        "relation": "defined-in",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "route:/api/invoices/delete",
+        "to": "action:DELETE@app/api/invoices/delete/route.ts",
+        "relation": "dispatches",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "file:app/api/invoices/delete/route.ts",
+        "to": "route:/api/invoices/delete",
+        "relation": "implements-route",
+        "metadata": {
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      },
+      {
+        "from": "route:/api/invoices/delete",
+        "to": "action:http/DELETE:/api/invoices/delete",
+        "relation": "dispatches",
+        "metadata": {
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      },
+      {
+        "from": "file:app/api/invoices/delete/route.ts",
+        "to": "action:http/DELETE:/api/invoices/delete",
+        "relation": "implements-action",
+        "metadata": {
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

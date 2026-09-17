@@ -1,0 +1,230 @@
+{
+  "schemaVersion": "0.1",
+  "generatedAt": "2026-09-16T21:38:11.250Z",
+  "scenario": {
+    "id": "tauri-app",
+    "title": "Tauri desktop application",
+    "description": "Desktop fixture for native invocation discovery.",
+    "application": {
+      "id": "tauri-app",
+      "name": "Tauri App"
+    },
+    "expectations": {
+      "frameworks": [
+        "tauri"
+      ],
+      "requiredNodeIds": [
+        "policy:native.invoke",
+        "invariant:native.invoke-bounded"
+      ]
+    }
+  },
+  "frameworks": [
+    "tauri"
+  ],
+  "passed": true,
+  "failures": [],
+  "adoption": {
+    "generatedAt": "2026-09-16T21:38:11.250Z",
+    "application": {
+      "id": "tauri-app",
+      "name": "Tauri App"
+    },
+    "summary": {
+      "files": 1,
+      "routes": 0,
+      "actions": 2,
+      "resources": 0,
+      "providers": 1,
+      "tests": 0
+    },
+    "signals": [
+      {
+        "id": "risk.no-test-script",
+        "category": "risk",
+        "label": "No package test script",
+        "evidence": [
+          "package.json#scripts"
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "gaps": [
+      {
+        "id": "testing.no-linked-tests",
+        "severity": "warning",
+        "category": "testing",
+        "message": "No tests are represented in the semantic graph.",
+        "evidence": []
+      },
+      {
+        "id": "operations.no-ci",
+        "severity": "warning",
+        "category": "operations",
+        "message": "No GitHub Actions workflows were detected.",
+        "evidence": []
+      },
+      {
+        "id": "testing.no-test-script",
+        "severity": "warning",
+        "category": "testing",
+        "message": "package.json has no test script.",
+        "evidence": [
+          "package.json#scripts"
+        ]
+      }
+    ],
+    "recommendations": [
+      "Add or improve framework adapters so externally reachable routes are represented.",
+      "Connect test files to guarantees and critical routes/actions.",
+      "Add a deterministic pre-release workflow and CI integration."
+    ],
+    "coverage": {
+      "semantic": 33,
+      "operational": 0
+    },
+    "readiness": {
+      "status": "early",
+      "score": 0
+    },
+    "workspace": {
+      "kind": "single-package"
+    }
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "application:tauri-app",
+        "kind": "application",
+        "label": "Tauri App",
+        "metadata": {
+          "source": "senten"
+        }
+      },
+      {
+        "id": "file:src/index.ts",
+        "kind": "file",
+        "label": "src/index.ts",
+        "source": "src/index.ts",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "hash": "93b95fa2f82640607fcff8d6be7a07aead8338026c9bbca94085d0c44e9ffd0e",
+          "language": "typescript",
+          "loc": 2,
+          "test": false,
+          "frameworks": []
+        }
+      },
+      {
+        "id": "action:save@src/index.ts",
+        "kind": "action",
+        "label": "save",
+        "source": "src/index.ts",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "symbolKind": "function",
+          "exported": true,
+          "line": 1,
+          "async": true
+        }
+      },
+      {
+        "id": "provider:package/@tauri-apps/api",
+        "kind": "provider",
+        "label": "@tauri-apps/api",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "external": true,
+          "package": "@tauri-apps/api"
+        }
+      },
+      {
+        "id": "policy:native.invoke",
+        "kind": "policy",
+        "metadata": {
+          "declaredBy": "architecture-manifest"
+        }
+      },
+      {
+        "id": "invariant:native.invoke-bounded",
+        "kind": "invariant",
+        "metadata": {
+          "declaredBy": "architecture-manifest"
+        }
+      },
+      {
+        "id": "action:tauri/save",
+        "kind": "action",
+        "label": "save",
+        "source": "src/index.ts",
+        "metadata": {
+          "framework": "tauri",
+          "boundary": "native-command",
+          "irFragmentProvenance": [
+            {
+              "adapter": "tauri",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "tauri.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "application:tauri-app",
+        "to": "file:src/index.ts",
+        "relation": "contains",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "action:save@src/index.ts",
+        "to": "file:src/index.ts",
+        "relation": "defined-in",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "file:src/index.ts",
+        "to": "provider:package/@tauri-apps/api",
+        "relation": "uses-package",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "invariant:native.invoke-bounded",
+        "to": "policy:native.invoke",
+        "relation": "enforced-by",
+        "metadata": {
+          "declaredBy": "architecture-manifest"
+        }
+      },
+      {
+        "from": "file:src/index.ts",
+        "to": "action:tauri/save",
+        "relation": "invokes-native",
+        "metadata": {
+          "irFragmentProvenance": [
+            {
+              "adapter": "tauri",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "tauri.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

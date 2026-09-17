@@ -1,6 +1,6 @@
 {
   "name": "senten",
-  "version": "0.11.1-alpha.0",
+  "version": "1.0.0-rc.3",
   "private": false,
   "description": "Semantic application architecture for secure, explainable, cross-platform living software.",
   "license": "Apache-2.0",
@@ -23,7 +23,9 @@
     "prepack": "npm run clean && npm run build",
     "pack:dry-run": "npm pack --dry-run --ignore-scripts",
     "release:verify": "npm run preflight && npm run pack:dry-run",
-    "release:artifacts": "node scripts/release-artifacts.mjs"
+    "release:artifacts": "node scripts/release-artifacts.mjs",
+    "showcase:build": "npm run build && node scripts/build-showcase.mjs",
+    "self:proof": "npm run build && node scripts/self-proof.mjs"
   },
   "engines": {
     "node": ">=22.5"
@@ -62,7 +64,7 @@
   "homepage": "https://github.com/thomasdscx/senten#readme",
   "publishConfig": {
     "access": "public",
-    "tag": "alpha"
+    "tag": "rc"
   },
   "dependencies": {
     "typescript": "5.8.3"

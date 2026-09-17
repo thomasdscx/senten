@@ -20,6 +20,7 @@ export interface ClickthruOptions extends CrawlOptions {
   headless?: boolean;
   maxInteractionsPerPage?: number;
   includeActions?: boolean;
+  viewport?: { width:number; height:number; label?:string };
 }
 
 export interface JourneyRunOptions {
@@ -27,6 +28,7 @@ export interface JourneyRunOptions {
   headless?: boolean;
   baseUrl?: string;
   inputs?: Record<string,string>;
+  viewport?: { width:number; height:number; label?:string };
 }
 
 function normalizeUrl(value:string, base?:string):string|undefined {
@@ -92,7 +94,7 @@ export async function clickthruWebsite(startUrl:string, options:ClickthruOptions
   let browser:any;
   try{browser=await browserType.launch({headless:options.headless??true});}
   catch(error){throw new Error(`Unable to launch ${browserName}. Install its browser runtime first (for example: npx playwright install ${browserName}). ${error instanceof Error?error.message:String(error)}`);}
-  const context=await browser.newContext(); const page=await context.newPage(); const startedAt=new Date().toISOString(); const runId=`int_${randomUUID().slice(0,8)}`; const origin=new URL(normalized).origin; const queue=[normalized]; const visited=new Set<string>(); const nodes:InteractionNodeRecord[]=[]; const edges:InteractionEdgeRecord[]=[]; const findings:InteractionFinding[]=[]; const maxPages=Math.max(1,options.maxPages??20); const maxInteractions=Math.max(1,options.maxInteractionsPerPage??100);
+  const context=await browser.newContext(options.viewport?{viewport:{width:options.viewport.width,height:options.viewport.height}}:{}); const page=await context.newPage(); const startedAt=new Date().toISOString(); const runId=`int_${randomUUID().slice(0,8)}`; const origin=new URL(normalized).origin; const queue=[normalized]; const visited=new Set<string>(); const nodes:InteractionNodeRecord[]=[]; const edges:InteractionEdgeRecord[]=[]; const findings:InteractionFinding[]=[]; const maxPages=Math.max(1,options.maxPages??20); const maxInteractions=Math.max(1,options.maxInteractionsPerPage??100);
   try{
     while(queue.length&&visited.size<maxPages){
       const url=queue.shift()!; if(visited.has(url))continue; visited.add(url);
@@ -100,6 +102,7 @@ export async function clickthruWebsite(startUrl:string, options:ClickthruOptions
       try{response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:options.timeoutMs??15000});}
       catch(error){findings.push({id:`finding_${randomUUID().slice(0,8)}`,runId,severity:'error',kind:'navigation-failed',url,message:error instanceof Error?error.message:String(error)});continue;}
       const status=response?.status?.()??0; const title=await page.title().catch(()=>undefined); nodes.push({id:`page:${url}`,runId,url,status,title,kind:'page'}); if(status>=400)findings.push({id:`finding_${randomUUID().slice(0,8)}`,runId,severity:'error',kind:'broken-page',url,message:`HTTP ${status}`});
+      if(options.viewport){const overflow=await page.evaluate(()=>({scrollWidth:document.documentElement.scrollWidth,clientWidth:document.documentElement.clientWidth,scrollHeight:document.documentElement.scrollHeight,clientHeight:document.documentElement.clientHeight})).catch(()=>undefined);if(overflow&&overflow.scrollWidth>overflow.clientWidth+2)findings.push({id:`finding_${randomUUID().slice(0,8)}`,runId,severity:'warning',kind:'horizontal-overflow',url,message:`Document width ${overflow.scrollWidth}px exceeds viewport ${overflow.clientWidth}px`,metadata:{viewport:options.viewport,overflow}});}
       const anchors=await page.locator('a[href]').evaluateAll((els:any[])=>els.map((el:any)=>({href:el.href,text:(el.innerText||el.getAttribute('aria-label')||'').trim()}))).catch(()=>[]);
       for(const link of anchors as {href:string;text:string}[]){const href=normalizeUrl(link.href,url);if(!href)continue;edges.push({id:`edge_${hashShort(`${url}->${href}`)}`,runId,from:`page:${url}`,to:`page:${href}`,kind:'link',...(link.text?{label:link.text}:{})});const u=new URL(href);if((options.sameOrigin??true)&&u.origin!==origin)continue;if(!visited.has(href))queue.push(href);}
       const interactives=page.locator('button, input:not([type=hidden]), select, textarea, [role=button], [role=link]'); const count=Math.min(await interactives.count(),maxInteractions);
@@ -122,7 +125,7 @@ export async function clickthruWebsite(startUrl:string, options:ClickthruOptions
       }
     }
   } finally { await context.close(); await browser.close(); }
-  const endedAt=new Date().toISOString(); const run:InteractionRunRecord={id:runId,kind:'clickthru',target:normalized,engine:`playwright:${browserName}`,startedAt,endedAt,status:findings.some(f=>f.severity==='error')?'failed':'passed',pages:nodes.filter(n=>n.kind==='page').length,interactions:nodes.filter(n=>n.kind!=='page').length,findings:findings.length,metadata:{maxPages}};
+  const endedAt=new Date().toISOString(); const run:InteractionRunRecord={id:runId,kind:'clickthru',target:normalized,engine:`playwright:${browserName}`,startedAt,endedAt,status:findings.some(f=>f.severity==='error')?'failed':'passed',pages:nodes.filter(n=>n.kind==='page').length,interactions:nodes.filter(n=>n.kind!=='page').length,findings:findings.length,metadata:{maxPages,...(options.viewport?{viewport:options.viewport}:{})}};
   return {run,nodes,edges,findings};
 }
 
@@ -130,7 +133,7 @@ export async function runJourney(definition:JourneyDefinition, options:JourneyRu
   const playwright=await loadPlaywright(); const browserName=options.browser??'chromium'; let browser:any;
   try{browser=await playwright[browserName].launch({headless:options.headless??true});}
   catch(error){throw new Error(`Unable to launch ${browserName}. Install its browser runtime first. ${error instanceof Error?error.message:String(error)}`);}
-  const context=await browser.newContext(); const page=await context.newPage(); const startedAt=new Date().toISOString(); const runId=`int_${randomUUID().slice(0,8)}`; const results:JourneyStepResult[]=[]; const findings:InteractionFinding[]=[]; let failed=false;
+  const context=await browser.newContext(options.viewport?{viewport:{width:options.viewport.width,height:options.viewport.height}}:{}); const page=await context.newPage(); const startedAt=new Date().toISOString(); const runId=`int_${randomUUID().slice(0,8)}`; const results:JourneyStepResult[]=[]; const findings:InteractionFinding[]=[]; let failed=false;
   try{
     for(let i=0;i<definition.steps.length;i++){
       const step=definition.steps[i]!; const started=new Date().toISOString();

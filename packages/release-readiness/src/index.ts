@@ -3,6 +3,7 @@ import { constants } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { ApplicationIR, SentenConfig } from '../../core/src/index.js';
 import { LocalStateStore } from '../../local-state/src/index.js';
+import { compatibilityReport } from '../../stabilization/src/index.js';
 
 export type ReadinessSeverity = 'error'|'warning'|'info';
 export interface ReadinessCheck { id:string; label:string; status:'pass'|'fail'|'warn'; severity:ReadinessSeverity; detail:string; }
@@ -23,7 +24,7 @@ export async function runReleaseReadiness(cwd:string):Promise<ReleaseReadinessRe
   }
   const irPath=join(cwd,'.senten','state-truss.json');
   if(!await exists(irPath))checks.push(check('state.ir','StateTruss IR','fail','error','.senten/state-truss.json is missing'));
-  else{try{const ir=JSON.parse(await readFile(irPath,'utf8')) as ApplicationIR;checks.push(check('state.ir','StateTruss IR',Array.isArray(ir.nodes)&&Array.isArray(ir.edges)?'pass':'fail','error',`${ir.nodes?.length??0} nodes / ${ir.edges?.length??0} edges`));}catch(error){checks.push(check('state.ir','StateTruss IR','fail','error',`Invalid IR: ${error instanceof Error?error.message:String(error)}`));}}
+  else{try{const ir=JSON.parse(await readFile(irPath,'utf8')) as ApplicationIR;checks.push(check('state.ir','StateTruss IR',Array.isArray(ir.nodes)&&Array.isArray(ir.edges)?'pass':'fail','error',`${ir.nodes?.length??0} nodes / ${ir.edges?.length??0} edges`));const compat=compatibilityReport(ir);checks.push(check('state.compatibility','Application IR compatibility',compat.compatible?'pass':'fail','error',compat.compatible?`schema ${compat.irSchema}`:compat.warnings.join('; ')));}catch(error){checks.push(check('state.ir','StateTruss IR','fail','error',`Invalid IR: ${error instanceof Error?error.message:String(error)}`));}}
   const dbPath=join(cwd,'.senten','senten.db');
   if(!await exists(dbPath))checks.push(check('state.db','Local state database','fail','error','.senten/senten.db is missing'));
   else{try{const store=await LocalStateStore.open(cwd);const integrity=store.integrityCheck();const schema=store.schemaVersion();store.close();checks.push(check('state.db','Local state database',integrity==='ok'?'pass':'fail','error',`integrity=${integrity}; schema=${schema}`));}catch(error){checks.push(check('state.db','Local state database','fail','error',error instanceof Error?error.message:String(error)));}}

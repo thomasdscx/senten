@@ -1,0 +1,20 @@
+{
+  "application": {
+    "id": "senten-v1-0-0-rc-2",
+    "name": "senten-v1.0.0-rc.2"
+  },
+  "environment": "development",
+  "extensions": [
+    "react",
+    "git",
+    "launchproof"
+  ],
+  "registries": [
+    {
+      "name": "local",
+      "type": "local",
+      "location": ".senten/packages",
+      "trusted": true
+    }
+  ]
+}

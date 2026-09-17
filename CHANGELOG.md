@@ -1,4 +1,61 @@
+## 1.0.0-rc.3
+
+- Harden framework adapter activation to use parsed imports and project dependency signals instead of raw detector substrings.
+- Prevent Senten adapter/test implementation text from falsely reporting Next.js, Expo, Supabase, or Tauri as application frameworks.
+- Suppress route-adapter recommendations for non-route-bearing library/CLI projects.
+- Add dogfood regression coverage for framework self-pollution.
+
+## 1.0.0-rc.1 — Builds 26–30 Release Candidate Hardening
+
+- added real-app Next.js + Supabase semantic discovery fixtures and first-party Supabase adapter;
+- added Next route-handler HTTP actions and inferred Supabase resource access;
+- added explainable blast-radius analysis to `senten impact`;
+- hardened MCP against path traversal and client-side authority escalation;
+- expanded monorepo adoption coverage including pnpm workspaces;
+- added CLI/source version-alignment diagnostics to help detect stale global installs;
+- candidate-froze command, extension and registry protocol markers as `1.0-rc1`;
+- added `senten release check --rc` and npm/GHCR `rc` release channels;
+- added RC verification documentation and retained Application IR as an independently versioned schema.
+
+## 0.25.0-alpha.0
+
+- Hardens Application IR fragment merging so same-kind adapter disagreements cannot silently overwrite the canonical semantic identity; conflicting metadata is preserved as diagnostics and provenance.
+- Hardens MCP project scope with sensitive-path denial, external absolute-path denial, and credential/private-key redaction on tool output.
+- Hardens Docker sandboxes with read-only root filesystems, tmpfs scratch space, no-new-privileges, dropped Linux capabilities, and explicit boundary reporting.
+- Deepens existing-application adoption with workspace/package-manager detection, structured architecture/security/testing/operations gaps, readiness scoring, and strict-mode critical-gap failure.
+- Adds a cross-platform hardening fixture suite for Builds 22–25.
+
+## 0.21.1-alpha.0
+
+- Harden Windows MCP stdio test lifecycle by waiting for child-process shutdown before temporary-directory cleanup.
+- Add bounded retry cleanup for transient Windows `EBUSY`/locked-directory conditions.
+- Preserve all Build 21 MCP permission and live-effect assertions without skips or platform-specific weakening.
+
 # Changelog
+
+## 0.21.0-alpha.0
+
+- Formalized the versioned Application IR Fragment SPI for framework adapters.
+- Added deterministic StateTruss fragment validation/merge with adapter provenance and collision diagnostics.
+- Added first-party alpha IR adapters for Next.js, Expo, and Tauri.
+- Added fail-closed sandbox mutation effect boundaries and explicit live-effect override semantics.
+- Hardened mutating Playwright click-through probes behind an explicit live-effects gate.
+- Added a real MCP stdio JSON-RPC transport with read-only default tool exposure, timeout/output limits, and shell-free execution.
+- Added Build 21 hardening tests and protocol documentation.
+
+## 0.20.0-alpha.0 — Builds 12–20 Capability Sprint
+
+- completed the alpha release/distribution hardening lane and prepared npm Trusted Publishing;
+- added `senten adopt` with safe existing-application architecture signals and adoption reports;
+- added explicit `senten declare`, `senten relate`, and `senten why` semantic architecture operations;
+- added provider-neutral capability registration, health selection, graceful-degradation state and operational budgets;
+- expanded the first-party Git integration with persistent project-scoped identity bindings and mismatch diagnostics;
+- added Git context to agent Task Context Bundles without copying credentials;
+- added declarative safe failure-simulation plans that require isolated execution;
+- retained signed extension/package trust, compatibility and registry boundaries as the ecosystem foundation;
+- added Observatory adoption intelligence and `/api/adoption`;
+- added `senten compatibility` as a machine-readable stabilization boundary for IR/protocol/state contracts;
+- retained unknown-is-not-safe, evidence-before-AI and safe-by-simulation principles.
 
 ## 0.11.1-alpha.0
 
@@ -151,3 +208,12 @@ Windows acceptance hardening patch.
 ## 0.1.5-alpha.0
 
 - Added SQLite local state, append-only operation ledger, scoped memory, profiles, templates, blueprints, package integrity and local registries.
+
+## 1.0.0-rc.2
+
+- Added `senten.architecture.json` as a declarative architecture overlay for policies, invariants, and other semantic contracts.
+- Added `.sentenignore` support so controlled fixtures and generated demo sources do not pollute production architecture discovery.
+- Added the Senten self-model with security, agent, sandbox, registry, and evidence invariants.
+- Added the controlled Scenario Lab corpus and `senten scenario` verification/export commands.
+- Added `senten showcase build` and a static interactive showcase that renders real precomputed Senten analysis without executing visitor repositories.
+- Added regression coverage for architecture manifests, scenario verification, showcase artifact generation, and ignore boundaries.

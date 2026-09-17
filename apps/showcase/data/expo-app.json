@@ -1,0 +1,231 @@
+{
+  "schemaVersion": "0.1",
+  "generatedAt": "2026-09-16T21:38:11.227Z",
+  "scenario": {
+    "id": "expo-app",
+    "title": "Expo application",
+    "description": "Expo Router application fixture.",
+    "application": {
+      "id": "expo-app",
+      "name": "Expo App"
+    },
+    "expectations": {
+      "frameworks": [
+        "expo",
+        "react"
+      ],
+      "requiredNodeIds": [
+        "invariant:mobile.navigation"
+      ]
+    }
+  },
+  "frameworks": [
+    "expo",
+    "react"
+  ],
+  "passed": true,
+  "failures": [],
+  "adoption": {
+    "generatedAt": "2026-09-16T21:38:11.227Z",
+    "application": {
+      "id": "expo-app",
+      "name": "Expo App"
+    },
+    "summary": {
+      "files": 1,
+      "routes": 1,
+      "actions": 0,
+      "resources": 0,
+      "providers": 0,
+      "tests": 0
+    },
+    "signals": [
+      {
+        "id": "framework.react",
+        "category": "framework",
+        "label": "React",
+        "evidence": [
+          "package:react@19.0.0"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "routes.discovered",
+        "category": "route",
+        "label": "1 application routes",
+        "evidence": [
+          "route:/"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "risk.no-test-script",
+        "category": "risk",
+        "label": "No package test script",
+        "evidence": [
+          "package.json#scripts"
+        ],
+        "confidence": "medium"
+      },
+      {
+        "id": "risk.no-policy-model",
+        "category": "risk",
+        "label": "Routes exist but no explicit Senten policy nodes are declared",
+        "evidence": [
+          "route:/"
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "gaps": [
+      {
+        "id": "security.routes-without-policy",
+        "severity": "critical",
+        "category": "security",
+        "message": "Externally reachable routes are present but no explicit policy nodes are modeled.",
+        "evidence": [
+          "route:/"
+        ]
+      },
+      {
+        "id": "testing.no-linked-tests",
+        "severity": "warning",
+        "category": "testing",
+        "message": "No tests are represented in the semantic graph.",
+        "evidence": []
+      },
+      {
+        "id": "operations.no-ci",
+        "severity": "warning",
+        "category": "operations",
+        "message": "No GitHub Actions workflows were detected.",
+        "evidence": []
+      },
+      {
+        "id": "testing.no-test-script",
+        "severity": "warning",
+        "category": "testing",
+        "message": "package.json has no test script.",
+        "evidence": [
+          "package.json#scripts"
+        ]
+      }
+    ],
+    "recommendations": [
+      "Declare authorization/security policies for privileged actions and routes.",
+      "Connect test files to guarantees and critical routes/actions.",
+      "Add a deterministic pre-release workflow and CI integration."
+    ],
+    "coverage": {
+      "semantic": 33,
+      "operational": 0
+    },
+    "readiness": {
+      "status": "early",
+      "score": 0
+    },
+    "workspace": {
+      "kind": "single-package"
+    }
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "application:expo-app",
+        "kind": "application",
+        "label": "Expo App",
+        "metadata": {
+          "source": "senten"
+        }
+      },
+      {
+        "id": "file:app/index.tsx",
+        "kind": "file",
+        "label": "app/index.tsx",
+        "source": "app/index.tsx",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "hash": "ce659fba7529194f9363a0419f652654ec8e1497a982abdbc91f9b2cd1a54e51",
+          "language": "typescript",
+          "loc": 2,
+          "test": false,
+          "frameworks": []
+        }
+      },
+      {
+        "id": "component:Home@app/index.tsx",
+        "kind": "component",
+        "label": "Home",
+        "source": "app/index.tsx",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "symbolKind": "function",
+          "exported": true,
+          "line": 1,
+          "async": false
+        }
+      },
+      {
+        "id": "invariant:mobile.navigation",
+        "kind": "invariant",
+        "metadata": {
+          "declaredBy": "architecture-manifest"
+        }
+      },
+      {
+        "id": "route:/",
+        "kind": "route",
+        "label": "/",
+        "source": "app/index.tsx",
+        "metadata": {
+          "framework": "expo",
+          "irFragmentProvenance": [
+            {
+              "adapter": "expo",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "expo.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "application:expo-app",
+        "to": "file:app/index.tsx",
+        "relation": "contains",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "component:Home@app/index.tsx",
+        "to": "file:app/index.tsx",
+        "relation": "defined-in",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "file:app/index.tsx",
+        "to": "route:/",
+        "relation": "implements-route",
+        "metadata": {
+          "irFragmentProvenance": [
+            {
+              "adapter": "expo",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "expo.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

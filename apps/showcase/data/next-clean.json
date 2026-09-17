@@ -1,0 +1,356 @@
+{
+  "schemaVersion": "0.1",
+  "generatedAt": "2026-09-16T21:38:11.246Z",
+  "scenario": {
+    "id": "next-clean",
+    "title": "Healthy Next.js service",
+    "description": "A small Next.js API with declared policy and invariant.",
+    "application": {
+      "id": "next-clean",
+      "name": "Next Clean"
+    },
+    "expectations": {
+      "frameworks": [
+        "next",
+        "react"
+      ],
+      "requiredNodeIds": [
+        "route:/api/health",
+        "policy:health.read",
+        "invariant:health.available"
+      ],
+      "noGapIds": [
+        "security.routes-without-policy",
+        "architecture.no-invariants"
+      ],
+      "readinessMin": 45
+    }
+  },
+  "frameworks": [
+    "next",
+    "react"
+  ],
+  "passed": true,
+  "failures": [],
+  "adoption": {
+    "generatedAt": "2026-09-16T21:38:11.246Z",
+    "application": {
+      "id": "next-clean",
+      "name": "Next Clean"
+    },
+    "summary": {
+      "files": 2,
+      "routes": 1,
+      "actions": 2,
+      "resources": 0,
+      "providers": 0,
+      "tests": 1
+    },
+    "signals": [
+      {
+        "id": "framework.next",
+        "category": "framework",
+        "label": "Next.js",
+        "evidence": [
+          "package:next@16.0.0"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "framework.react",
+        "category": "framework",
+        "label": "React",
+        "evidence": [
+          "package:react@19.0.0"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "ci.github",
+        "category": "ci",
+        "label": "GitHub Actions",
+        "evidence": [
+          "file:.github/workflows/ci.yml"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "routes.discovered",
+        "category": "route",
+        "label": "1 application routes",
+        "evidence": [
+          "route:/api/health"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "tests.discovered",
+        "category": "test",
+        "label": "1 tests",
+        "evidence": [
+          "test:health.test.ts"
+        ],
+        "confidence": "high"
+      }
+    ],
+    "gaps": [],
+    "recommendations": [],
+    "coverage": {
+      "semantic": 50,
+      "operational": 50
+    },
+    "readiness": {
+      "status": "developing",
+      "score": 50
+    },
+    "workspace": {
+      "kind": "single-package",
+      "packageManager": "npm@10.9.2"
+    }
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "application:next-clean",
+        "kind": "application",
+        "label": "Next Clean",
+        "metadata": {
+          "source": "senten"
+        }
+      },
+      {
+        "id": "file:app/api/health/route.ts",
+        "kind": "file",
+        "label": "app/api/health/route.ts",
+        "source": "app/api/health/route.ts",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "hash": "5420b466cdf5b4ff23dd70f3f5b4242fe7801d9e6fecb56fbe29092ba4684722",
+          "language": "typescript",
+          "loc": 2,
+          "test": false,
+          "frameworks": []
+        }
+      },
+      {
+        "id": "route:/api/health",
+        "kind": "route",
+        "label": "/api/health",
+        "source": "app/api/health/route.ts",
+        "metadata": {
+          "framework": "next",
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "routeKind": "api",
+          "methods": [
+            "GET"
+          ],
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action:GET@app/api/health/route.ts",
+        "kind": "action",
+        "label": "GET",
+        "source": "app/api/health/route.ts",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "symbolKind": "function",
+          "exported": true,
+          "line": 1,
+          "async": true
+        }
+      },
+      {
+        "id": "file:health.test.ts",
+        "kind": "file",
+        "label": "health.test.ts",
+        "source": "health.test.ts",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "hash": "c29990d00f5d909a39593d8832635e9c982309fa0b92885d33d1323f5764cabd",
+          "language": "typescript",
+          "loc": 2,
+          "test": true,
+          "frameworks": []
+        }
+      },
+      {
+        "id": "test:health.test.ts",
+        "kind": "test",
+        "label": "health.test.ts",
+        "source": "health.test.ts",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "id": "symbol:healthContract@health.test.ts",
+        "kind": "symbol",
+        "label": "healthContract",
+        "source": "health.test.ts",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1",
+          "symbolKind": "function",
+          "exported": true,
+          "line": 1,
+          "async": false
+        }
+      },
+      {
+        "id": "policy:health.read",
+        "kind": "policy",
+        "metadata": {
+          "declaredBy": "architecture-manifest"
+        }
+      },
+      {
+        "id": "invariant:health.available",
+        "kind": "invariant",
+        "metadata": {
+          "declaredBy": "architecture-manifest"
+        }
+      },
+      {
+        "id": "action:http/GET:/api/health",
+        "kind": "action",
+        "label": "GET /api/health",
+        "source": "app/api/health/route.ts",
+        "metadata": {
+          "framework": "next",
+          "httpMethod": "GET",
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "application:next-clean",
+        "to": "file:app/api/health/route.ts",
+        "relation": "contains",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "route:/api/health",
+        "to": "file:app/api/health/route.ts",
+        "relation": "implemented-by",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "action:GET@app/api/health/route.ts",
+        "to": "file:app/api/health/route.ts",
+        "relation": "defined-in",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "route:/api/health",
+        "to": "action:GET@app/api/health/route.ts",
+        "relation": "dispatches",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "application:next-clean",
+        "to": "file:health.test.ts",
+        "relation": "contains",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "test:health.test.ts",
+        "to": "file:health.test.ts",
+        "relation": "defined-in",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "symbol:healthContract@health.test.ts",
+        "to": "file:health.test.ts",
+        "relation": "defined-in",
+        "metadata": {
+          "discoveredBy": "source-intelligence",
+          "discoveryVersion": "senten-source-v1"
+        }
+      },
+      {
+        "from": "file:app/api/health/route.ts",
+        "to": "route:/api/health",
+        "relation": "implements-route",
+        "metadata": {
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      },
+      {
+        "from": "route:/api/health",
+        "to": "action:http/GET:/api/health",
+        "relation": "dispatches",
+        "metadata": {
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      },
+      {
+        "from": "file:app/api/health/route.ts",
+        "to": "action:http/GET:/api/health",
+        "relation": "implements-action",
+        "metadata": {
+          "irFragmentProvenance": [
+            {
+              "adapter": "next",
+              "adapterVersion": "1.0.0-rc.1",
+              "analyzer": "next.source",
+              "confidence": "high"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

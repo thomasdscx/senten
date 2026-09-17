@@ -1,0 +1,1 @@
+{"id":"monorepo","title":"Workspace monorepo","description":"An npm workspace used to validate multi-package adoption.","application":{"id":"monorepo","name":"Monorepo"},"expectations":{"frameworks":["react"],"requiredNodeIds":["invariant:workspace.boundary"]}}

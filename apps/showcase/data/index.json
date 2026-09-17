@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "0.1",
+  "generatedAt": "2026-09-16T21:38:11.254Z",
+  "scenarios": [
+    {
+      "id": "expo-app",
+      "title": "Expo application",
+      "description": "Expo Router application fixture.",
+      "passed": true,
+      "readiness": {
+        "status": "early",
+        "score": 0
+      },
+      "gaps": 4
+    },
+    {
+      "id": "missing-policy",
+      "title": "Missing authorization policy",
+      "description": "Externally reachable mutation route without a modeled policy.",
+      "passed": true,
+      "readiness": {
+        "status": "early",
+        "score": 0
+      },
+      "gaps": 3
+    },
+    {
+      "id": "monorepo",
+      "title": "Workspace monorepo",
+      "description": "An npm workspace used to validate multi-package adoption.",
+      "passed": true,
+      "readiness": {
+        "status": "early",
+        "score": 1
+      },
+      "gaps": 2
+    },
+    {
+      "id": "next-clean",
+      "title": "Healthy Next.js service",
+      "description": "A small Next.js API with declared policy and invariant.",
+      "passed": true,
+      "readiness": {
+        "status": "developing",
+        "score": 50
+      },
+      "gaps": 0
+    },
+    {
+      "id": "tauri-app",
+      "title": "Tauri desktop application",
+      "description": "Desktop fixture for native invocation discovery.",
+      "passed": true,
+      "readiness": {
+        "status": "early",
+        "score": 0
+      },
+      "gaps": 3
+    },
+    {
+      "id": "tenant-isolation-regression",
+      "title": "Tenant isolation regression",
+      "description": "A tenant-sensitive delete route with no explicit authorization policy.",
+      "passed": true,
+      "readiness": {
+        "status": "early",
+        "score": 1
+      },
+      "gaps": 3
+    }
+  ]
+}

@@ -32,6 +32,7 @@ export interface SandboxSpec {
   metadata?: Record<string, unknown> | undefined;
 }
 
+export type SandboxEffectIntent = 'read-only'|'mutating';
 export interface SandboxRunSpec {
   command: string;
   args?: string[] | undefined;
@@ -39,6 +40,8 @@ export interface SandboxRunSpec {
   cwd?: string | undefined;
   timeoutMs?: number | undefined;
   maxOutputBytes?: number | undefined;
+  effectIntent?: SandboxEffectIntent | undefined;
+  allowLiveEffects?: boolean | undefined;
 }
 
 export interface SandboxRunResult {
@@ -48,6 +51,20 @@ export interface SandboxRunResult {
   durationMs: number;
   timedOut: boolean;
   truncated: boolean;
+}
+
+
+export interface SandboxBoundaryReport { network:'denied'|'inherited'; filesystem:'sandbox-workspace'|'host-visible'; process:'container'|'host'; rootFilesystem:'read-only'|'host'; privilegeEscalation:'blocked'|'unknown'; confidence:'high'|'low'; }
+export function sandboxBoundaryReport(record:SandboxRecord):SandboxBoundaryReport {
+  if(record.provider==='docker')return{network:record.network==='deny'?'denied':'inherited',filesystem:'sandbox-workspace',process:'container',rootFilesystem:'read-only',privilegeEscalation:'blocked',confidence:record.network==='deny'?'high':'low'};
+  return{network:'inherited',filesystem:'sandbox-workspace',process:'host',rootFilesystem:'host',privilegeEscalation:'unknown',confidence:'low'};
+}
+
+export function assertSandboxEffectBoundary(record:SandboxRecord,spec:SandboxRunSpec):{mode:'read-only'|'contained-mutation'|'live-effects';reason:string}{
+  if((spec.effectIntent??'read-only')!=='mutating')return{mode:'read-only',reason:'No external mutation intent declared.'};
+  if(record.provider==='docker'&&record.network==='deny')return{mode:'contained-mutation',reason:'Docker network namespace denies external network access; host filesystem exposure is limited to the sandbox workspace mount.'};
+  if(spec.allowLiveEffects)return{mode:'live-effects',reason:'Operator explicitly allowed live effects; Senten cannot guarantee external mutation containment.'};
+  throw new Error(`Mutating sandbox actions require an enforceable effect boundary. Use a Docker sandbox with network=deny, or explicitly opt into live effects with --allow-live-effects.`);
 }
 
 export interface SandboxHandle {
@@ -148,7 +165,7 @@ export class DockerSandboxProvider implements SandboxProvider {
     const synthetic = await writeSyntheticSecrets(root, spec.syntheticSecrets ?? []);
     const containerName = `senten-${id.replace(/[^a-zA-Z0-9_.-]/g, '-')}`;
     const image = spec.dockerImage ?? 'node:22-bookworm-slim';
-    const args = ['create', '--name', containerName, '--workdir', '/workspace', '--volume', `${resolve(root)}:/workspace`];
+    const args = ['create', '--name', containerName, '--workdir', '/workspace', '--volume', `${resolve(root)}:/workspace`, '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m', '--security-opt', 'no-new-privileges', '--cap-drop', 'ALL', '--label', 'dev.senten.sandbox=true', '--label', `dev.senten.sandbox.id=${id}`];
     if ((spec.network ?? 'deny') === 'deny') args.push('--network', 'none');
     const budget = spec.budget ?? {};
     if (budget.memoryMb) args.push('--memory', `${budget.memoryMb}m`);
@@ -273,7 +290,7 @@ export async function materializeSnapshot(snapshot: SandboxSnapshotRecord, targe
   await cp(snapshot.root, targetRoot, { recursive: true });
 }
 
-export function createSandboxRunRecord(sandbox: SandboxRecord, spec: SandboxRunSpec, result: SandboxRunResult, preSnapshotId?: string, workspaceDigestBefore?: string, workspaceDigestAfter?: string): SandboxRunRecord {
+export function createSandboxRunRecord(sandbox: SandboxRecord, spec: SandboxRunSpec, result: SandboxRunResult, preSnapshotId?: string, workspaceDigestBefore?: string, workspaceDigestAfter?: string, metadata?:Record<string,unknown>): SandboxRunRecord {
   const now = new Date().toISOString();
   return {
     id: `run_${randomUUID().slice(0, 8)}`,
@@ -292,7 +309,8 @@ export function createSandboxRunRecord(sandbox: SandboxRecord, spec: SandboxRunS
     stderrHash: createHash('sha256').update(result.stderr).digest('hex'),
     preSnapshotId,
     workspaceDigestBefore,
-    workspaceDigestAfter
+    workspaceDigestAfter,
+    ...(metadata?{metadata}:{})
   };
 }
 

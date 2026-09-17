@@ -1,13 +1,13 @@
-name: Publish npm alpha
+name: Publish npm prerelease
 on:
   workflow_dispatch:
     inputs:
       tag:
         description: npm dist-tag
         required: true
-        default: alpha
+        default: rc
         type: choice
-        options: [alpha, beta, latest]
+        options: [alpha, beta, rc]
 permissions:
   contents: read
   id-token: write
@@ -22,8 +22,9 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+      - name: Use npm with Trusted Publishing support
+        run: npm install --global npm@^11.5.1
       - run: npm install --ignore-scripts
       - run: npm run release:verify
-      - run: npm publish --provenance --access public --tag "${{ inputs.tag }}"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish with OIDC provenance
+        run: npm publish --provenance --access public --tag "${{ inputs.tag }}"

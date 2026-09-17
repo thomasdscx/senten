@@ -24,15 +24,16 @@ export function permissionDecision(agent:AgentProfile,capability:string,target?:
 }
 
 export function commandCapability(command:string):string{
-  const readOnly=new Set(['inspect','explain','graph','impact','history','recall','source','diff','drift','paths','doctor','proof','guarantee','extensions','report','observatory','assurance']);
+  const readOnly=new Set(['inspect','explain','why','graph','impact','history','recall','source','diff','drift','paths','doctor','proof','guarantee','extensions','report','observatory','assurance','compatibility']);
   if(readOnly.has(command))return 'project.read';
-  if(command==='discover')return 'semantic.write';
+  if(command==='discover'||command==='adopt'||command==='declare'||command==='relate')return 'semantic.write';
   if(command==='crawl'||command==='clickthru'||command==='journey')return 'interaction.execute';
   if(command==='runtime')return 'runtime.observe';
   if(command==='evidence')return 'evidence.write';
   if(command==='launchproof')return 'evidence.write';
-  if(command==='sandbox')return 'sandbox.execute';
+  if(command==='sandbox'||command==='simulate')return 'sandbox.execute';
   if(command==='workflow')return 'workflow.execute';
+  if(command==='capability')return 'capability.manage';
   if(['element','create','undo','redo','rollback','template','blueprint','profile','memory','checkpoint','session','transaction','registry','package'].includes(command))return 'project.write';
   return `command.${command}`;
 }

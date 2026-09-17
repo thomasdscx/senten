@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "0.1",
+  "metadata": {
+    "purpose": "Senten self-model for RC dogfooding",
+    "owner": "Senten maintainers"
+  },
+  "nodes": [
+    {"id":"policy:mcp.write","kind":"policy","label":"MCP writes require explicit server authority"},
+    {"id":"policy:mcp.live-effects","kind":"policy","label":"MCP live effects require a second explicit authority gate"},
+    {"id":"policy:sandbox.external-network","kind":"policy","label":"Sandbox external network access is denied unless explicitly granted"},
+    {"id":"policy:package.remote-install","kind":"policy","label":"Remote packages require integrity and trust validation"},
+    {"id":"policy:agent.destructive-operation","kind":"policy","label":"Destructive agent operations require explicit grants"},
+    {"id":"invariant:mcp.live-effects-require-explicit-gate","kind":"invariant","label":"MCP live effects cannot be enabled by tool arguments alone"},
+    {"id":"invariant:mcp.paths-remain-project-scoped","kind":"invariant","label":"MCP filesystem paths remain inside the project boundary"},
+    {"id":"invariant:sandbox.network-denied-by-default","kind":"invariant","label":"Sandbox networking is denied by default for mutation-capable execution"},
+    {"id":"invariant:evidence.verified-cannot-be-self-issued","kind":"invariant","label":"Senten cannot self-issue verified evidence"},
+    {"id":"invariant:adapter.merge-is-deterministic","kind":"invariant","label":"Adapter IR merge order and collision handling are deterministic"},
+    {"id":"invariant:secrets.never-enter-template","kind":"invariant","label":"Template extraction excludes common secret material"},
+    {"id":"invariant:agent.authority-is-bounded","kind":"invariant","label":"Agent authority is bounded by explicit grants"},
+    {"id":"invariant:registry.remote-install-fails-closed","kind":"invariant","label":"Untrusted remote package installation fails closed"}
+  ],
+  "edges": [
+    {"from":"invariant:mcp.live-effects-require-explicit-gate","to":"policy:mcp.live-effects","relation":"enforced-by"},
+    {"from":"invariant:mcp.paths-remain-project-scoped","to":"policy:mcp.write","relation":"enforced-by"},
+    {"from":"invariant:sandbox.network-denied-by-default","to":"policy:sandbox.external-network","relation":"enforced-by"},
+    {"from":"invariant:agent.authority-is-bounded","to":"policy:agent.destructive-operation","relation":"enforced-by"},
+    {"from":"invariant:registry.remote-install-fails-closed","to":"policy:package.remote-install","relation":"enforced-by"}
+  ]
+}
