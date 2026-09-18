@@ -7,7 +7,7 @@ on:
         required: true
         default: rc
         type: choice
-        options: [alpha, beta, rc]
+        options: [alpha, beta, rc, latest]
 permissions:
   contents: read
   id-token: write
