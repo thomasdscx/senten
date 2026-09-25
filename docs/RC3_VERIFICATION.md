@@ -1,4 +1,4 @@
-# Senten 1.0.0-rc.3 verification
+# Senten 1.0.0-rc.5 verification
 
 RC3 is a dogfood repair candidate addressing false framework detection in Senten self-analysis.
 

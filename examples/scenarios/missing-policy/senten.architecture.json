@@ -1,1 +1,1 @@
-{"schemaVersion":"0.1","nodes":[{"id":"invariant:tenant.isolation","kind":"invariant"}],"edges":[]}
+{"schemaVersion":"0.1","nodes":[{"id":"invariant:tenant.isolation","kind":"invariant"},{"id":"route:/api/invoices/delete","kind":"route","metadata":{"security":"unprotected"}}],"edges":[]}

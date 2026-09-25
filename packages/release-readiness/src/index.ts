@@ -1,6 +1,7 @@
 import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { join, relative } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import type { ApplicationIR, SentenConfig } from '../../core/src/index.js';
 import { LocalStateStore } from '../../local-state/src/index.js';
 import { compatibilityReport } from '../../stabilization/src/index.js';
@@ -13,7 +14,7 @@ async function exists(path:string):Promise<boolean>{try{await access(path,consta
 function check(id:string,label:string,status:ReadinessCheck['status'],severity:ReadinessSeverity,detail:string):ReadinessCheck{return{id,label,status,severity,detail};}
 function nodeAtLeast(major:number,minor:number):boolean{const [a,b]=process.versions.node.split('.').map(Number);return (a??0)>major||((a??0)===major&&(b??0)>=minor);}
 
-export async function runReleaseReadiness(cwd:string):Promise<ReleaseReadinessReport>{
+export async function runReleaseReadiness(cwd:string,options:{packageMode?:boolean}={}):Promise<ReleaseReadinessReport>{
   const started=Date.now(); const checks:ReadinessCheck[]=[];
   checks.push(check('runtime.node','Supported Node runtime',nodeAtLeast(22,5)?'pass':'fail','error',`Node ${process.versions.node}; requires >=22.5`));
   const configPath=join(cwd,'senten.config.json');
@@ -28,11 +29,11 @@ export async function runReleaseReadiness(cwd:string):Promise<ReleaseReadinessRe
   const dbPath=join(cwd,'.senten','senten.db');
   if(!await exists(dbPath))checks.push(check('state.db','Local state database','fail','error','.senten/senten.db is missing'));
   else{try{const store=await LocalStateStore.open(cwd);const integrity=store.integrityCheck();const schema=store.schemaVersion();store.close();checks.push(check('state.db','Local state database',integrity==='ok'?'pass':'fail','error',`integrity=${integrity}; schema=${schema}`));}catch(error){checks.push(check('state.db','Local state database','fail','error',error instanceof Error?error.message:String(error)));}}
-  for(const file of ['README.md','LICENSE','SECURITY.md','CONTRIBUTING.md'])checks.push(check(`docs.${file.toLowerCase()}`,file,await exists(join(cwd,file))?'pass':'warn','warning',await exists(join(cwd,file))?'present':'missing'));
+  const docs=options.packageMode?['README.md','LICENSE','SECURITY.md','CONTRIBUTING.md']:['README.md'];for(const file of docs)checks.push(check(`docs.${file.toLowerCase()}`,file,await exists(join(cwd,file))?'pass':'warn','warning',await exists(join(cwd,file))?'present':'missing'));
   const secretFiles:string[]=[];for(const name of ['.env','.env.local','.env.production','credentials.json','service-account.json'])if(await exists(join(cwd,name)))secretFiles.push(name);
   checks.push(check('security.root-secrets','Root secret files',secretFiles.length?'warn':'pass','warning',secretFiles.length?`Review before publishing: ${secretFiles.join(', ')}`:'No common root secret files detected'));
-  const gitDir=join(cwd,'.git'); if(await exists(gitDir)){const trackedEnv=await detectTrackedSecrets(cwd);checks.push(check('security.git-secrets','Potential tracked secrets',trackedEnv.length?'fail':'pass','error',trackedEnv.length?`Potentially sensitive tracked files: ${trackedEnv.join(', ')}`:'No common sensitive filenames appear tracked'));}else checks.push(check('security.git-secrets','Potential tracked secrets','warn','warning','Not a Git working tree; tracked-file check skipped'));
-  const pkgPath=join(cwd,'package.json'); if(await exists(pkgPath)){try{const pkg=JSON.parse(await readFile(pkgPath,'utf8')) as Record<string,unknown>;const license=pkg.license==='Apache-2.0';checks.push(check('package.license','Package license',license?'pass':'warn','warning',String(pkg.license??'missing')));const version=String(pkg.version??'');checks.push(check('package.version','Package version',/^\d+\.\d+\.\d+/.test(version)?'pass':'fail','error',version||'missing'));}catch{checks.push(check('package.root','Root package metadata','fail','error','package.json is invalid'));}}
+  const gitRootResult=spawnSync('git',['rev-parse','--show-toplevel'],{cwd,encoding:'utf8'}); const gitRoot=gitRootResult.status===0&&gitRootResult.stdout.trim()?gitRootResult.stdout.trim():undefined; if(gitRoot){const trackedEnv=await detectTrackedSecrets(gitRoot);checks.push(check('security.git-secrets','Potential tracked secrets',trackedEnv.length?'fail':'pass','error',trackedEnv.length?`Potentially sensitive tracked files: ${trackedEnv.join(', ')}`:'No common sensitive filenames appear tracked'));}else checks.push(check('security.git-secrets','Potential tracked secrets','warn','warning','Not inside a Git working tree; tracked-file check skipped'));
+  const pkgPath=join(cwd,'package.json'); if(await exists(pkgPath)){try{const pkg=JSON.parse(await readFile(pkgPath,'utf8')) as Record<string,unknown>;if(options.packageMode){const license=typeof pkg.license==='string'&&pkg.license.length>0;checks.push(check('package.license','Package license',license?'pass':'warn','warning',String(pkg.license??'missing')));const version=String(pkg.version??'');checks.push(check('package.version','Package version',/^\d+\.\d+\.\d+/.test(version)?'pass':'fail','error',version||'missing'));}}catch{checks.push(check('package.root','Root package metadata','fail','error','package.json is invalid'));}}
   const errors=checks.filter(x=>x.status==='fail'&&x.severity==='error').length;const warnings=checks.filter(x=>x.status==='warn').length;const passed=checks.filter(x=>x.status==='pass').length;
   return{version:1,generatedAt:new Date().toISOString(),project:cwd,checks,errors,warnings,passed,ready:errors===0,durationMs:Date.now()-started};
 }

@@ -1,1 +1,1 @@
-{"schemaVersion":"0.1","nodes":[{"id":"invariant:tenant.isolation","kind":"invariant"},{"id":"resource:projects","kind":"resource"}],"edges":[{"from":"invariant:tenant.isolation","to":"resource:projects","relation":"protects"}]}
+{"schemaVersion":"0.1","nodes":[{"id":"invariant:tenant.isolation","kind":"invariant"},{"id":"resource:projects","kind":"resource"},{"id":"route:/api/projects/delete","kind":"route","metadata":{"security":"unprotected"}}],"edges":[{"from":"invariant:tenant.isolation","to":"resource:projects","relation":"protects"}]}

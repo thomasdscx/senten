@@ -1,5 +1,5 @@
 {
-  "name": "@senten/adapter-supabase",
+  "name": "@senten/adapter-drizzle",
   "version": "1.0.0-rc.7",
   "private": true,
   "type": "module",

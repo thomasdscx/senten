@@ -21,6 +21,7 @@ import { nextAdapter } from '../../../adapters/next/src/index.js';
 import { expoAdapter } from '../../../adapters/expo/src/index.js';
 import { tauriAdapter } from '../../../adapters/tauri/src/index.js';
 import { supabaseAdapter } from '../../../adapters/supabase/src/index.js';
+import { drizzleAdapter } from '../../../adapters/drizzle/src/index.js';
 import { gitIntegration } from '../../../integrations/git/src/index.js';
 import { launchProofIntegration, launchProofResultToEvidence } from '../../../integrations/launchproof/src/index.js';
 import { createAssuranceCase, createAssuranceExchange, evaluateAssuranceCase, extractAssuranceClaims } from '../../assurance/src/index.js';
@@ -34,19 +35,30 @@ import { compatibilityReport } from '../../stabilization/src/index.js';
 import { buildMcpToolDefinitions, runMcpStdioServer } from '../../mcp/src/index.js';
 import { computeBlastRadius } from '../../impact-intelligence/src/index.js';
 import { exportScenarioArtifacts, listScenarios, runScenario } from '../../scenario-lab/src/index.js';
+import { buildKnowledgePack, candidateToMemory, inferProjectKnowledge, ingestExternalSource, learningStorage, loadKnowledgePack, pruneLearningStorage, readLearningSnapshot, updateAllLearningCandidates, updateLearningCandidate, writeLearningSnapshot } from '../../learning/src/index.js';
+import { GitHubRepositoryProvider, githubCredentialStatus } from '../../repository/src/index.js';
 
-const VERSION = '1.0.0-rc.3';
-const CORE_COMMANDS = ['welcome','init','adopt','declare','relate','why','lineage','capability','simulate','compatibility','create','use','discover','source','baseline','diff','drift','inspect','explain','graph','impact','element','history','undo','redo','session','transaction','checkpoint','rollback','memory','recall','profile','template','blueprint','registry','package','trust','workflow','cache','extensions','sandbox','crawl','clickthru','journey','paths','runtime','evidence','guarantee','assurance','launchproof','agent','context','commands','mcp','doctor','proof','report','observatory','release','benchmark','schema','scenario','showcase'] as const;
+const VERSION = '1.0.0-rc.8';
+const CORE_COMMANDS = ['welcome','init','record','learn','repo','auth','adopt','declare','relate','why','lineage','capability','simulate','compatibility','create','use','discover','source','baseline','diff','drift','inspect','explain','graph','impact','element','history','undo','redo','session','transaction','checkpoint','rollback','memory','recall','profile','template','blueprint','registry','package','trust','workflow','cache','extensions','sandbox','crawl','clickthru','journey','paths','runtime','evidence','guarantee','assurance','launchproof','agent','context','commands','mcp','doctor','proof','report','observatory','release','benchmark','schema','scenario','showcase'] as const;
 
-export async function main(argv: string[]): Promise<void> {
-  const cwd = process.cwd(); const [command, ...rest] = argv;
+async function mainImpl(argv: string[]): Promise<void> {
+  const cwd = process.cwd(); const [command, ...rawRest] = argv;
+  let rest = rawRest;
   if (!command) return printWelcome();
   if (['help','--help','-h'].includes(command)) return printHelp();
   if (['--version','-v','version'].includes(command)) return console.log(VERSION);
   const registry = defaultRegistry();
+  if(command!=='init'&&rest.includes('--init')){
+    if(!await exists(join(cwd,'senten.config.json')))await initProject(cwd,[]);
+    rest=rest.filter(arg=>arg!=='--init');
+  }
   switch (command) {
     case 'welcome': return printWelcome();
     case 'init': return initCommand(cwd, rest, registry);
+    case 'record': return recordCommand(cwd, rest);
+    case 'learn': return learnCommand(cwd, rest);
+    case 'repo': return repoCommand(cwd, rest);
+    case 'auth': return authCommand(cwd, rest);
     case 'adopt': return adoptCommand(cwd, rest);
     case 'declare': return declareCommand(cwd, rest);
     case 'relate': return relateCommand(cwd, rest);
@@ -113,6 +125,14 @@ export async function main(argv: string[]): Promise<void> {
 }
 
 
+interface ActiveRecordPointer { id:string; file:string; name:string; startedAt:string; }
+interface CommandRecordEntry { command:string; args:string[]; startedAt:string; endedAt:string; durationMs:number; exitCode:number; status:'passed'|'failed'; error?:string; }
+interface DogfoodRecord { schemaVersion:1; id:string; name:string; sentenVersion:string; application?:string; startedAt:string; endedAt?:string; commands:CommandRecordEntry[]; snapshot?:Record<string,unknown>; }
+async function activeRecordPointer(cwd:string):Promise<ActiveRecordPointer|undefined>{try{return JSON.parse(await readFile(join(cwd,'.senten','recording.json'),'utf8')) as ActiveRecordPointer;}catch{return undefined;}}
+async function appendRecordedCommand(pointer:ActiveRecordPointer|undefined,argv:string[],startedAt:string,durationMs:number,error?:unknown):Promise<void>{if(!pointer||argv[0]==='record'&&argv[1]==='start')return;try{const record=JSON.parse(await readFile(pointer.file,'utf8')) as DogfoodRecord;const exitCode=error?1:Number(process.exitCode??0);record.commands.push({command:argv[0]??'',args:argv.slice(1),startedAt,endedAt:new Date().toISOString(),durationMs,exitCode,status:exitCode===0?'passed':'failed',...(error?{error:error instanceof Error?error.message:String(error)}:{})});await writeFile(pointer.file,JSON.stringify(record,null,2)+'\n');}catch{}}
+export async function main(argv: string[]): Promise<void> {const cwd=process.cwd();const pointer=await activeRecordPointer(cwd);const started=Date.now(),startedAt=new Date().toISOString();try{await mainImpl(argv);await appendRecordedCommand(pointer,argv,startedAt,Date.now()-started);}catch(error){await appendRecordedCommand(pointer,argv,startedAt,Date.now()-started,error);throw error;}}
+
+
 function printWelcome(): void { console.log(`SENTEN
 Architecture for Living Software
 
@@ -124,6 +144,9 @@ Get started
   senten init
   senten discover
   senten doctor
+
+Convenience
+  senten discover --init        Explicitly initialize first when needed
 
 Explore
   senten commands
@@ -172,6 +195,15 @@ Safe change control:
   rollback checkpoint:<id>       Reverse applied operations after a checkpoint
 
 Knowledge & reuse:
+  learn [project]               Infer evidence-backed project knowledge candidates
+  learn candidates             Review learned candidates and confidence
+  learn approve|reject <id>    Human-gate candidate promotion
+  learn package --name <name>  Build a reusable knowledge pack
+  learn install <path>         Import a verified knowledge pack
+  learn source <repo>          Remote GitHub learning; no clone/raw source retention
+  learn storage|prune          Inspect or reclaim learned-source storage
+  repo <inspect|tree|permissions>  Read a remote GitHub repository without cloning
+  auth github <status|login>   Use GitHub CLI or ephemeral token authentication
   memory <add|list|project>      Typed/scoped project memory
   recall <subject>               Resolve project/team/profile memory
   profile <create|use|list>      Development defaults and team behavior
@@ -244,7 +276,7 @@ Examples:
   senten context --task "modify billing safely" --agent codex
 `); }
 
-function defaultRegistry(): ExtensionRegistry { return new ExtensionRegistry().register(reactAdapter).register(nextAdapter).register(expoAdapter).register(tauriAdapter).register(supabaseAdapter).register(gitIntegration).register(launchProofIntegration); }
+function defaultRegistry(): ExtensionRegistry { return new ExtensionRegistry().register(reactAdapter).register(nextAdapter).register(expoAdapter).register(tauriAdapter).register(supabaseAdapter).register(drizzleAdapter).register(gitIntegration).register(launchProofIntegration); }
 
 async function initCommand(cwd:string,args:string[],registry:ExtensionRegistry):Promise<void>{
   if(args[0]==='template'){
@@ -256,8 +288,14 @@ async function initCommand(cwd:string,args:string[],registry:ExtensionRegistry):
 }
 
 async function initProject(cwd:string,args:string[]):Promise<void>{
-  const force=args.includes('--force'); const sentenDir=join(cwd,'.senten'); await mkdir(join(sentenDir,'cache'),{recursive:true}); await mkdir(join(sentenDir,'packages'),{recursive:true}); await mkdir(join(sentenDir,'artifacts'),{recursive:true});
-  const configPath=join(cwd,'senten.config.json'); if(!force&&await exists(configPath))throw new Error('senten.config.json already exists. Use --force to replace it.');
+  const force=args.includes('--force'); const sentenDir=join(cwd,'.senten'); const configPath=join(cwd,'senten.config.json');
+  if(!force&&await exists(configPath)){
+    const config=await loadConfig(cwd); await mkdir(join(sentenDir,'cache'),{recursive:true}); await mkdir(join(sentenDir,'packages'),{recursive:true}); await mkdir(join(sentenDir,'artifacts'),{recursive:true});
+    let repaired=false; if(!await exists(join(sentenDir,'state-truss.json'))){const graph=new StateTrussGraph(config.application); graph.addNode({id:`application:${config.application.id}`,kind:'application',label:config.application.name}); await writeIR(cwd,graph.toIR()); repaired=true;}
+    const store=await LocalStateStore.open(cwd); await migrateLegacyHistory(cwd,store); if(!store.get('schema.version'))store.set('schema.version','0.20.0'); store.close();
+    console.log(`✓ Senten already initialized\n\nApplication  ${config.application.name}\nState        .senten/senten.db\nStatus       ${repaired?'repaired missing local state':'no changes required'}`);return;
+  }
+  await mkdir(join(sentenDir,'cache'),{recursive:true}); await mkdir(join(sentenDir,'packages'),{recursive:true}); await mkdir(join(sentenDir,'artifacts'),{recursive:true});
   const name=basename(cwd); const config:SentenConfig={application:{id:slug(name),name},environment:'development',extensions:['react','git','launchproof'],registries:[{name:'local',type:'local',location:'.senten/packages',trusted:true}]};
   await writeFile(configPath,JSON.stringify(config,null,2)+'\n'); const graph=new StateTrussGraph(config.application); graph.addNode({id:`application:${config.application.id}`,kind:'application',label:config.application.name}); await writeIR(cwd,graph.toIR());
   const store=await LocalStateStore.open(cwd); await migrateLegacyHistory(cwd,store); store.set('schema.version','0.20.0'); store.close();
@@ -892,8 +930,8 @@ LaunchProof    ${store.listLaunchProofResults().length} result bundle(s), ${evid
 
 
 async function releaseCommand(cwd:string,args:string[]):Promise<void>{
-  const action=args[0]??'check'; if(action!=='check')throw new Error('Usage: senten release check [--strict] [--rc] [--json]');
-  const report=await runReleaseReadiness(cwd);let rc:unknown=undefined;let rcFailed=false;
+  const action=args[0]??'check'; if(action!=='check')throw new Error('Usage: senten release check [--strict] [--package] [--rc] [--json]');
+  const report=await runReleaseReadiness(cwd,{packageMode:args.includes('--package')||args.includes('--rc')});let rc:unknown=undefined;let rcFailed=false;
   if(args.includes('--rc')){await requireInitialized(cwd);const ir=await loadIR(cwd);const adoption=await analyzeAdoption(cwd,ir);let packageVersion='unknown';try{const pkg=JSON.parse(await readFile(join(cwd,'package.json'),'utf8')) as {version?:string};packageVersion=pkg.version??'unknown';}catch{}const compat=compatibilityReport(ir);const critical=adoption.gaps.filter(g=>g.severity==='critical');const requirements={releaseCandidateVersion:/-rc\./.test(packageVersion)||/-rc\./.test(VERSION),compatibility:compat.compatible,noCriticalAdoptionGaps:critical.length===0};rc={version:VERSION,packageVersion,compatibility:compat,adoption:{readiness:adoption.readiness,criticalGaps:critical},requirements};rcFailed=!(requirements.releaseCandidateVersion&&requirements.compatibility&&requirements.noCriticalAdoptionGaps);}
   if(args.includes('--json'))console.log(JSON.stringify({...report,...(rc?{rc}:{})},null,2));
   else{console.log(`SENTEN RELEASE CHECK
@@ -1010,12 +1048,80 @@ function resolveSince(value:string):Date{if(/^\d+(m|h|d)$/.test(value)){const n=
 async function applyRollback(cwd:string,rollback:RollbackRecipe):Promise<void>{if(rollback.type==='move'){const from=resolveElementPath(cwd,rollback.from),to=resolveElementPath(cwd,rollback.to);if(!await exists(from))throw new Error(`Rollback source no longer exists: ${rollback.from}`);if(await exists(to))throw new Error(`Rollback destination already exists: ${rollback.to}`);await mkdir(dirname(to),{recursive:true});await rename(from,to);return;}if(rollback.type==='delete-created'){const path=resolveElementPath(cwd,rollback.path);if(!await exists(path))return;if(rollback.expectedHash&&await hashPath(path)!==rollback.expectedHash)throw new Error(`Refusing rollback because ${rollback.path} changed since creation.`);await rm(path,{recursive:true,force:true});return;}if(rollback.type==='restore-file'){const path=resolveElementPath(cwd,rollback.path);if(await exists(path))throw new Error(`Refusing to overwrite existing file during rollback: ${rollback.path}`);await mkdir(dirname(path),{recursive:true});await writeFile(path,Buffer.from(rollback.contentBase64,'base64'));}}
 
 
+function recordSafeName(input:string):string{return input.trim().toLowerCase().replace(/[^a-z0-9._-]+/g,'-').replace(/^-+|-+$/g,'')||'record';}
+async function recordSnapshot(cwd:string):Promise<Record<string,unknown>>{const snapshot:Record<string,unknown>={};try{const ir=await loadIR(cwd);snapshot.architecture={nodes:ir.nodes.length,edges:ir.edges.length,frameworks:[...new Set(ir.nodes.map(n=>n.metadata?.framework).filter((x):x is string=>typeof x==='string'))].sort()};}catch{}try{snapshot.adoption=JSON.parse(await readFile(join(cwd,'.senten','artifacts','adoption-report.json'),'utf8'));}catch{}return snapshot;}
+async function learnCommand(cwd:string,args:string[]):Promise<void>{
+  await requireInitialized(cwd);
+  const action=args[0]??'project';
+  if(action.startsWith('https://github.com/'))return learnCommand(cwd,['source',action,...args.slice(1)]);
+  if(action==='project'){
+    const ir=await loadIR(cwd);const previous=(await readLearningSnapshot(cwd))?.candidates??[];const snapshot=await inferProjectKnowledge(cwd,ir,previous);const path=await writeLearningSnapshot(cwd,snapshot);const pending=snapshot.candidates.filter(c=>c.status==='candidate');
+    console.log(`SENTEN LEARN\nApplication  ${snapshot.application}\nFiles        ${snapshot.inventory.files}\nLanguages    ${snapshot.inventory.languages.map(x=>`${x.language} (${x.files})`).join(', ')||'unknown'}\nCandidates   ${snapshot.candidates.length}\nPending      ${pending.length}\nArtifact     ${relative(cwd,path)}\n\nLearning is evidence-backed and never promoted to truth without approval.\nNext\n  senten learn candidates\n  senten learn approve <id>`);return;
+  }
+  if(action==='candidates'){
+    const snapshot=await readLearningSnapshot(cwd);if(!snapshot)throw new Error('No learning candidates found. Run: senten learn project');
+    if(args.includes('--json'))return console.log(JSON.stringify(snapshot,null,2));
+    console.log(`SENTEN LEARN CANDIDATES\nApplication ${snapshot.application}\nGenerated   ${snapshot.generatedAt}\n`);for(const c of snapshot.candidates)console.log(`${c.status.toUpperCase().padEnd(9)} ${String(Math.round(c.confidence*100)).padStart(3)}% ${c.id.padEnd(17)} ${c.kind.padEnd(18)} ${c.subject}\n           ${c.value}`);return;
+  }
+  if(action==='approve'||action==='reject'){
+    const id=args[1];if(!id)throw new Error(`Usage: senten learn ${action} <candidate-id|all>`);const status=action==='approve'?'approved':'rejected';const updated=id==='all'?await updateAllLearningCandidates(cwd,status):[await updateLearningCandidate(cwd,id,status)];
+    if(status==='approved'){
+      const ir=await loadIR(cwd);const store=await LocalStateStore.open(cwd);try{const service=new MemoryService(store);for(const c of updated){const m=candidateToMemory(c,ir.application.id);service.add({kind:m.kind,scope:m.scope,value:m.value,source:m.source,actor:m.actor,...(m.scopeId?{scopeId:m.scopeId}:{}),...(m.subject?{subject:m.subject}:{}),...(m.confidence!==undefined?{confidence:m.confidence}:{})});}}finally{store.close();}
+    }
+    console.log(`LEARN ${status.toUpperCase()} ${id}\nCandidates ${updated.length}${status==='approved'?'\nMemory     project-scoped':''}`);return;
+  }
+  if(action==='package'){
+    const name=flagValue(args,'--name');if(!name)throw new Error('Usage: senten learn package --name <name> [--version <semver>]');const version=flagValue(args,'--version')??'0.1.0';const snapshot=await readLearningSnapshot(cwd);if(!snapshot)throw new Error('No learning candidates found. Run: senten learn project');const built=await buildKnowledgePack(cwd,name,version,snapshot.candidates);console.log(`KNOWLEDGE PACK BUILT\nName       ${built.manifest.name}\nVersion    ${built.manifest.version}\nEntries    ${built.payload.knowledge.length}\nPath       ${relative(cwd,built.root)}\nIntegrity  sha256`);return;
+  }
+  if(action==='install'){
+    const path=args[1];if(!path)throw new Error('Usage: senten learn install <knowledge-pack-path>');const loaded=await loadKnowledgePack(resolve(cwd,path));const ir=await loadIR(cwd);const store=await LocalStateStore.open(cwd);try{const service=new MemoryService(store);for(const item of loaded.payload.knowledge)service.add({kind:item.kind==='convention'?'convention':'fact',scope:'project',scopeId:ir.application.id,subject:item.subject,value:item.value,source:`knowledge-pack:${loaded.manifest.name}@${loaded.manifest.version}`,actor:{type:'extension',id:loaded.manifest.name},confidence:item.confidence});}finally{store.close();}console.log(`KNOWLEDGE PACK INSTALLED\nName     ${loaded.manifest.name}\nVersion  ${loaded.manifest.version}\nEntries  ${loaded.payload.knowledge.length}\nScope    project`);return;
+  }
+  if(action==='source'||action==='repo'||action==='github'){
+    const source=args[1];if(!source)throw new Error('Usage: senten learn source <github-url|owner/repo> [--ref <branch-or-tag>] [--max-mb <n>]');const ref=flagValue(args,'--ref');const maxMb=Number(flagValue(args,'--max-mb')??'2');if(!Number.isFinite(maxMb)||maxMb<=0)throw new Error('--max-mb must be a positive number.');const ingested=await ingestExternalSource(cwd,source,ref,{maxRetainedBytes:Math.floor(maxMb*1024*1024)});console.log(`EXTERNAL KNOWLEDGE SOURCE\nSource      ${source}\nRepository  ${ingested.record.repository}\nRef         ${ingested.record.ref}\nCommit      ${ingested.record.commitSha.slice(0,12)}\nPolicy      static-only\nFiles       ${ingested.inventory.files}\nLanguages   ${ingested.inventory.languages.map(x=>`${x.language} (${x.files})`).join(', ')||'unknown'}\nManifests   ${ingested.inventory.manifests.length}\nSelected    ${ingested.record.selectedFiles.length} metadata file(s)\nRetained    ${(ingested.record.retainedBytes/1024).toFixed(1)} KB semantic metadata\nRaw source  removed / not retained\nArtifact    ${relative(cwd,ingested.metadataPath)}\n\nNo clone, package installation, lifecycle script, or repository code execution was performed.`);return;
+  }
+  if(action==='storage'){
+    const report=await learningStorage(cwd);if(args.includes('--json'))return console.log(JSON.stringify(report,null,2));console.log(`LEARNING STORAGE\nSources  ${report.sources.length}\nTotal    ${(report.totalBytes/1024).toFixed(1)} KB`);for(const x of report.sources)console.log(`  ${x.name.padEnd(32)} ${(x.bytes/1024).toFixed(1)} KB`);return;
+  }
+  if(action==='prune'){
+    const name=args[1];const count=await pruneLearningStorage(cwd,name);console.log(`LEARNING STORAGE PRUNED\nSources  ${count}`);return;
+  }
+  throw new Error('Usage: senten learn [project|candidates|approve|reject|package|install|source|storage|prune]');
+}
+
+async function repoCommand(_cwd:string,args:string[]):Promise<void>{
+  const action=args[0]??'inspect';const source=args[1];if(!source)throw new Error('Usage: senten repo <inspect|tree|permissions> <github-url|owner/repo> [--ref <ref>]');const provider=new GitHubRepositoryProvider();const ref=flagValue(args,'--ref');const snapshot=await provider.snapshot(source,ref);
+  if(action==='inspect'||action==='permissions'){
+    if(args.includes('--json'))return console.log(JSON.stringify(snapshot,null,2));console.log(`REMOTE REPOSITORY\nProvider    GitHub\nRepository  ${snapshot.repository.owner}/${snapshot.repository.repo}\nRef         ${snapshot.repository.ref}\nCommit      ${snapshot.commitSha}\nPrivate     ${snapshot.private?'yes':'no'}\nFiles       ${snapshot.entries.filter(x=>x.type==='blob').length}\nTrees       ${snapshot.entries.filter(x=>x.type==='tree').length}`);if(action==='permissions')console.log(`Permissions ${snapshot.permissions?Object.entries(snapshot.permissions).filter(([,v])=>v).map(([k])=>k).join(', ')||'none reported':'not reported by GitHub'}`);return;
+  }
+  if(action==='tree'){const limit=Number(flagValue(args,'--limit')??'100');for(const e of snapshot.entries.filter(x=>x.type==='blob').slice(0,limit))console.log(`${e.path}${typeof e.size==='number'?`  ${e.size}b`:''}`);return;}
+  throw new Error('Usage: senten repo <inspect|tree|permissions> <github-url|owner/repo> [--ref <ref>]');
+}
+
+async function authCommand(_cwd:string,args:string[]):Promise<void>{
+  if(args[0]!=='github')throw new Error('Usage: senten auth github <status|login>');const action=args[1]??'status';
+  if(action==='status'){const status=githubCredentialStatus();console.log(`GITHUB AUTH\nAvailable  ${status.available?'yes':'no'}\nSource     ${status.source}\nStorage    ${status.source==='gh-cli'?'GitHub CLI credential store':'Senten does not persist tokens'}`);return;}
+  if(action==='login'){const r=spawnSync('gh',['auth','login'],{stdio:'inherit',shell:false});if(r.error&&(r.error as NodeJS.ErrnoException).code==='ENOENT')throw new Error('GitHub CLI (gh) is not installed. Install gh, or set SENTEN_GITHUB_TOKEN for the current process.');if((r.status??1)!==0)throw new Error('GitHub authentication did not complete successfully.');return;}
+  throw new Error('Usage: senten auth github <status|login>');
+}
+
+async function recordCommand(cwd:string,args:string[]):Promise<void>{
+  await requireInitialized(cwd);const action=args[0]??'status';const recordsDir=join(cwd,'.senten','records');const activePath=join(cwd,'.senten','recording.json');await mkdir(recordsDir,{recursive:true});
+  if(action==='start'){const existing=await activeRecordPointer(cwd);if(existing)throw new Error(`Recording already active: ${existing.name} (${existing.id})`);const name=args.slice(1).filter(x=>!x.startsWith('-')).join(' ')||'dogfood';const stamp=new Date().toISOString().replace(/[:.]/g,'-');const id=`${recordSafeName(name)}-${stamp}`;const file=join(recordsDir,`${id}.json`);let application:string|undefined;try{application=(await loadIR(cwd)).application.name;}catch{}const record:DogfoodRecord={schemaVersion:1,id,name,sentenVersion:VERSION,...(application?{application}:{}),startedAt:new Date().toISOString(),commands:[]};await writeFile(file,JSON.stringify(record,null,2)+'\n');await writeFile(activePath,JSON.stringify({id,file,name,startedAt:record.startedAt},null,2)+'\n');console.log(`RECORDING STARTED ${id}\nName     ${name}\nFile     ${relative(cwd,file)}`);return;}
+  if(action==='stop'){const pointer=await activeRecordPointer(cwd);if(!pointer)throw new Error('No active recording.');const record=JSON.parse(await readFile(pointer.file,'utf8')) as DogfoodRecord;record.endedAt=new Date().toISOString();record.snapshot=await recordSnapshot(cwd);await writeFile(pointer.file,JSON.stringify(record,null,2)+'\n');await rm(activePath,{force:true});console.log(`RECORDING STOPPED ${record.id}\nCommands ${record.commands.length}\nFile     ${relative(cwd,pointer.file)}`);return;}
+  if(action==='status'){const pointer=await activeRecordPointer(cwd);if(!pointer){console.log('No active recording.');return;}console.log(`RECORDING ACTIVE ${pointer.id}\nName     ${pointer.name}\nStarted  ${pointer.startedAt}`);return;}
+  if(action==='list'){const files=(await readdir(recordsDir)).filter(x=>x.endsWith('.json')).sort();if(!files.length){console.log('No recordings.');return;}for(const file of files){try{const r=JSON.parse(await readFile(join(recordsDir,file),'utf8')) as DogfoodRecord;console.log(`${r.id.padEnd(42)} ${(r.endedAt?'complete':'active').padEnd(9)} ${r.commands.length} command(s)  ${r.name}`);}catch{}}return;}
+  if(action==='export'){let requested:string|undefined;for(let i=1;i<args.length;i++){const arg=args[i];if(!arg)continue;if(arg==='--format'||arg==='--output'){i++;continue;}if(arg.startsWith('--'))continue;requested=arg;break;}const files=(await readdir(recordsDir)).filter(x=>x.endsWith('.json')).sort();let file:string|undefined;if(requested){file=files.find(x=>x===requested||x===`${requested}.json`||x.startsWith(requested));}else file=files.at(-1);if(!file)throw new Error('Recording not found.');const record=JSON.parse(await readFile(join(recordsDir,file),'utf8')) as DogfoodRecord;const format=flagValue(args,'--format')??'md';const output=flagValue(args,'--output')??join(recordsDir,`${record.id}.${format==='json'?'json':'md'}`);if(format==='json'){await writeFile(output,JSON.stringify(record,null,2)+'\n');}else{const lines=[`# Senten Record — ${record.name}`,'',`- **Record:** ${record.id}`,`- **Application:** ${record.application??'unknown'}`,`- **Senten:** ${record.sentenVersion}`,`- **Started:** ${record.startedAt}`,`- **Ended:** ${record.endedAt??'active'}`,'','## Commands','', '| Status | Command | Duration |','|---|---|---:|',...record.commands.map(c=>`| ${c.status==='passed'?'PASS':'FAIL'} | \`senten ${[c.command,...c.args].join(' ')}\` | ${c.durationMs}ms |`)];const adoption=(record.snapshot?.adoption as any);if(adoption){lines.push('','## Adoption Snapshot','',`- **Readiness:** ${adoption.readiness?.status??'unknown'} (${adoption.readiness?.score??'-'}/100)`,`- **Semantic:** ${adoption.coverage?.semantic??'-'}%`,`- **Operational:** ${adoption.coverage?.operational??'-'}%`,`- **Security:** ${adoption.security?.state??'unknown'}`,`- **Gaps:** ${adoption.gaps?.length??0}`);}const failed=record.commands.filter(c=>c.status==='failed');lines.push('','## Result','',failed.length?`**FAIL** — ${failed.length} command(s) failed.`:'**PASS** — all recorded commands completed successfully.','');await writeFile(output,lines.join('\n'));}console.log(`RECORD EXPORTED ${relative(cwd,output)}`);return;}
+  throw new Error('Usage: senten record <start <name>|stop|status|list|export [id] [--format md|json] [--output path]>');
+}
+
+
 async function adoptCommand(cwd:string,args:string[]):Promise<void>{
   if(!await exists(join(cwd,'senten.config.json')))await initProject(cwd,[]); let ir=await loadIR(cwd);
-  if(!args.includes('--no-discover')){const discovered=await discoverSourceProject(cwd,ir.application,ir,{force:args.includes('--force'),analyzers:defaultRegistry().sourceAnalyzers()}); const manualNodes=ir.nodes.filter(n=>n.metadata?.discoveredBy!=='source-intelligence'); const manualEdges=ir.edges.filter(e=>e.metadata?.discoveredBy!=='source-intelligence'); ir={...discovered.ir,nodes:[...manualNodes,...discovered.ir.nodes.filter(n=>!manualNodes.some(m=>m.id===n.id))],edges:[...manualEdges,...discovered.ir.edges]}; await writeIR(cwd,ir);}
+  if(!args.includes('--no-discover')){const discovered=await discoverSourceProject(cwd,ir.application,ir,{force:args.includes('--force'),analyzers:defaultRegistry().sourceAnalyzers()}); const manualNodes=ir.nodes.filter(n=>n.metadata?.discoveredBy!=='source-intelligence'&&!Array.isArray(n.metadata?.irFragmentProvenance)); const manualEdges=ir.edges.filter(e=>e.metadata?.discoveredBy!=='source-intelligence'&&!Array.isArray(e.metadata?.irFragmentProvenance)); ir={...discovered.ir,nodes:[...manualNodes,...discovered.ir.nodes.filter(n=>!manualNodes.some(m=>m.id===n.id))],edges:[...manualEdges,...discovered.ir.edges]}; await writeIR(cwd,ir);}
   const report=await analyzeAdoption(cwd,ir); await mkdir(join(cwd,'.senten','artifacts'),{recursive:true}); const out=join(cwd,'.senten','artifacts','adoption-report.json'); await writeFile(out,JSON.stringify(report,null,2)+'\n');
   if(args.includes('--json'))return console.log(JSON.stringify(report,null,2));
-  console.log(`SENTEN ADOPT\nApplication   ${report.application.name}\nReadiness     ${report.readiness.status} (${report.readiness.score}/100)\nWorkspace     ${report.workspace.kind}${report.workspace.packageManager?` / ${report.workspace.packageManager}`:''}\nSemantic      ${report.coverage.semantic}%\nOperational   ${report.coverage.operational}%\nFiles         ${report.summary.files}\nRoutes        ${report.summary.routes}\nActions       ${report.summary.actions}\nResources     ${report.summary.resources}\nProviders     ${report.summary.providers}\nTests         ${report.summary.tests}\nSignals       ${report.signals.length}\nGaps          ${report.gaps.length}\nArtifact      ${relative(cwd,out)}`);
+  console.log(`SENTEN ADOPT\nApplication   ${report.application.name}\nReadiness     ${report.readiness.status} (${report.readiness.score}/100)\nWorkspace     ${report.workspace.kind}${report.workspace.packageManager?` / ${report.workspace.packageManager}`:''}\nSemantic      ${report.coverage.semantic}%\nOperational   ${report.coverage.operational}%\nSecurity      ${report.security.state}\nFiles         ${report.summary.files}\nRoutes        ${report.summary.routes}\nActions       ${report.summary.actions}\nResources     ${report.summary.resources}\nProviders     ${report.summary.providers}\nTests         ${report.summary.tests}\nSignals       ${report.signals.length}\nGaps          ${report.gaps.length}\nArtifact      ${relative(cwd,out)}`);
+  if(args.includes('--details')){console.log('\nSemantic coverage');for(const d of report.coverage.semanticBreakdown.filter(d=>d.applicable))console.log(`  ${d.label.padEnd(18)} ${String(d.score??'-').padStart(3)}%  ${d.detail}`);console.log('\nOperational coverage');for(const d of report.coverage.operationalBreakdown.filter(d=>d.applicable))console.log(`  ${d.label.padEnd(18)} ${String(d.score??'-').padStart(3)}%  ${d.detail}`);console.log(`\nSecurity model\n  ${report.security.detail}`);}
   if(report.signals.length){console.log('\nSignals');for(const x of report.signals)console.log(`  ${x.category.padEnd(11)} ${x.label} [${x.confidence}]`);} if(report.gaps.length){console.log('\nAdoption gaps');for(const x of report.gaps)console.log(`  ${x.severity.toUpperCase().padEnd(8)} ${x.message}`);} if(report.recommendations.length){console.log('\nNext architecture work');for(const x of report.recommendations)console.log(`  - ${x}`);}
   if(args.includes('--strict')&&report.gaps.some(g=>g.severity==='critical'))process.exitCode=1;
 }
@@ -1077,10 +1183,10 @@ async function hashFile(path:string):Promise<string>{return sha256(await readFil
 async function hashPath(path:string):Promise<string>{const info=await stat(path);if(info.isFile())return hashFile(path);const rows:string[]=[];async function walk(dir:string):Promise<void>{for(const entry of (await readdir(dir,{withFileTypes:true})).sort((a:any,b:any)=>a.name.localeCompare(b.name))){const p=join(dir,entry.name);const rel=relative(path,p).replaceAll('\\','/');if(entry.isDirectory()){rows.push(`d:${rel}`);await walk(p);}else if(entry.isFile())rows.push(`f:${rel}:${await hashFile(p)}`);}}await walk(path);return sha256(Buffer.from(rows.join('\n')));}
 function sha256(data:Buffer|string):string{return createHash('sha256').update(data).digest('hex');}
 async function dirSize(path:string):Promise<number>{if(!await exists(path))return 0;let total=0;for(const e of await readdir(path,{withFileTypes:true})){const p=join(path,e.name);if(e.isDirectory())total+=await dirSize(p);else if(e.isFile())total+=(await stat(p)).size;}return total;}
-async function requireInitialized(cwd:string):Promise<void>{if(!await exists(join(cwd,'senten.config.json')))throw new Error('Senten is not initialized. Run: senten init');}
-async function loadIR(cwd:string):Promise<ApplicationIR>{const path=join(cwd,'.senten','state-truss.json');if(!await exists(path))throw new Error('Senten is not initialized. Run: senten init');return JSON.parse(await readFile(path,'utf8')) as ApplicationIR;}
+async function requireInitialized(cwd:string):Promise<void>{if(!await exists(join(cwd,'senten.config.json')))throw new Error('Senten is not initialized in this directory.\n\nRun:\n  senten init\n\nOr rerun the command with:\n  --init');}
+async function loadIR(cwd:string):Promise<ApplicationIR>{const path=join(cwd,'.senten','state-truss.json');if(!await exists(path))throw new Error('Senten project state is missing. Run: senten init');return JSON.parse(await readFile(path,'utf8')) as ApplicationIR;}
 async function writeIR(cwd:string,ir:ApplicationIR):Promise<void>{await mkdir(join(cwd,'.senten'),{recursive:true});await writeFile(join(cwd,'.senten','state-truss.json'),JSON.stringify(ir,null,2)+'\n');}
-async function loadConfig(cwd:string):Promise<SentenConfig>{const path=join(cwd,'senten.config.json');if(!await exists(path))throw new Error('Senten is not initialized. Run: senten init');return JSON.parse(await readFile(path,'utf8')) as SentenConfig;}
+async function loadConfig(cwd:string):Promise<SentenConfig>{const path=join(cwd,'senten.config.json');if(!await exists(path))throw new Error('Senten is not initialized in this directory. Run: senten init');return JSON.parse(await readFile(path,'utf8')) as SentenConfig;}
 async function saveConfig(cwd:string,config:SentenConfig):Promise<void>{await writeFile(join(cwd,'senten.config.json'),JSON.stringify(config,null,2)+'\n');}
 async function findRegistryPackage(cwd:string,name:string):Promise<{manifest:Awaited<ReturnType<typeof loadPackage>>;path:string}|undefined>{const config=await loadConfig(cwd);for(const r of config.registries??[]){if(r.type!=='local')continue;const e=await new LocalRegistry({...r,location:resolve(cwd,r.location)}).find(name);if(e)return{manifest:e.manifest,path:e.path};}return undefined;}
 async function migrateLegacyHistory(cwd:string,store:LocalStateStore):Promise<void>{const path=join(cwd,'.senten','history.jsonl');if(!await exists(path)||store.listOperations().length)return;const text=await readFile(path,'utf8');for(const line of text.split(/\r?\n/).filter(Boolean)){try{const old=JSON.parse(line) as Record<string,unknown>;const id=String(old.id??`op_${randomUUID().slice(0,8)}`);const actor=typeof old.actor==='string'?actorFromString(old.actor):{type:'human' as const,id:'legacy'};const op:OperationRecord={id,timestamp:String(old.timestamp??new Date().toISOString()),actor,intent:String(old.intent??'legacy operation'),action:String(old.action??'unknown'),targets:Array.isArray(old.targets)?old.targets.map(String):[],environment:String(old.environment??'development'),dryRun:Boolean(old.dryRun),status:old.status==='planned'?'planned':'applied',reversibility:old.rollback?'reversible':'irreversible',...(old.rollback?{rollback:old.rollback as RollbackRecipe}:{}),metadata:{migratedFrom:'history.jsonl'}};store.putOperation(op);const oldStatus=String(old.status??'applied');store.appendEvent(eventFor(oldStatus==='planned'?'operation.planned':'operation.applied',id,actor));if(oldStatus==='rolled-back')store.appendEvent(eventFor('operation.undone',id,{type:'system',id:'migration'},{inverseOf:id}));}catch{}}await appendFile(path,`# migrated to senten.db at ${new Date().toISOString()}\n`);}

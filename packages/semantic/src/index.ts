@@ -5,6 +5,8 @@ import { validateApplicationIRFragment } from '../../extension-sdk/src/index.js'
 export interface IRMergeDiagnostic { level:'info'|'warning'|'error'; code:string; message:string; adapter?:string; subject?:string; }
 export interface IRMergeResult { ir:ApplicationIR; diagnostics:IRMergeDiagnostic[]; fragments:number; }
 
+function stableValue(value:unknown):string{if(value===null||typeof value!=='object')return JSON.stringify(value);if(Array.isArray(value))return `[${value.map(stableValue).join(',')}]`;return `{${Object.entries(value as Record<string,unknown>).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>`${JSON.stringify(k)}:${stableValue(v)}`).join(',')}}`;}
+function uniqueProvenance(items:unknown[]):unknown[]{const seen=new Set<string>();const out:unknown[]=[];for(const item of items){const key=stableValue(item);if(seen.has(key))continue;seen.add(key);out.push(item);}return out;}
 function edgeKey(edge:SemanticEdge):string{return `${edge.from}\0${edge.relation}\0${edge.to}`;}
 function provenanceFor(fragment:ApplicationIRFragment):Record<string,unknown>{return {adapter:fragment.source.adapter,adapterVersion:fragment.source.adapterVersion,analyzer:fragment.source.analyzer,confidence:fragment.source.confidence};}
 
@@ -21,7 +23,7 @@ export function mergeApplicationIRFragments(base:ApplicationIR, fragments:Applic
     for(const node of fragment.nodes){
       const existing=nodes.get(node.id);
       if(existing&&existing.kind!==node.kind){diagnostics.push({level:'error',code:'fragment.identity-collision',message:`${node.id}: ${existing.kind} vs ${node.kind}`,adapter:fragment.source.adapter,subject:node.id});continue;}
-      const provenance=[...((existing?.metadata?.irFragmentProvenance as unknown[])??[]),provenanceFor(fragment)];
+      const provenance=uniqueProvenance([...((existing?.metadata?.irFragmentProvenance as unknown[])??[]),provenanceFor(fragment)]);
       if(existing){
         const semanticConflict=(existing.label&&node.label&&existing.label!==node.label)||(existing.source&&node.source&&existing.source!==node.source);
         if(semanticConflict)diagnostics.push({level:'warning',code:'fragment.semantic-conflict',message:`Preserved canonical identity for ${node.id}; adapter ${fragment.source.adapter} supplied differing label/source metadata.`,adapter:fragment.source.adapter,subject:node.id});
@@ -30,7 +32,7 @@ export function mergeApplicationIRFragments(base:ApplicationIR, fragments:Applic
     }
     for(const edge of fragment.edges){
       if(!nodes.has(edge.from)||!nodes.has(edge.to)){diagnostics.push({level:'warning',code:'fragment.unresolved-edge',message:`${edge.from} -> ${edge.to}`,adapter:fragment.source.adapter});continue;}
-      const key=edgeKey(edge);const existing=edges.get(key);const provenance=[...((existing?.metadata?.irFragmentProvenance as unknown[])??[]),provenanceFor(fragment)];
+      const key=edgeKey(edge);const existing=edges.get(key);const provenance=uniqueProvenance([...((existing?.metadata?.irFragmentProvenance as unknown[])??[]),provenanceFor(fragment)]);
       edges.set(key,{...existing,...edge,metadata:{...existing?.metadata,...edge.metadata,irFragmentProvenance:provenance}});
     }
     for(const d of fragment.diagnostics??[])diagnostics.push({...d,adapter:fragment.source.adapter});

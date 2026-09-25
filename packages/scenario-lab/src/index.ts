@@ -7,6 +7,7 @@ import { nextAdapter } from '../../../adapters/next/src/index.js';
 import { expoAdapter } from '../../../adapters/expo/src/index.js';
 import { tauriAdapter } from '../../../adapters/tauri/src/index.js';
 import { supabaseAdapter } from '../../../adapters/supabase/src/index.js';
+import { drizzleAdapter } from '../../../adapters/drizzle/src/index.js';
 
 export interface ScenarioExpectation { frameworks?:string[]; requiredNodeIds?:string[]; forbiddenNodeIds?:string[]; gapIds?:string[]; noGapIds?:string[]; readinessMin?:number; readinessMax?:number; }
 export interface ScenarioDefinition { id:string; title:string; description:string; application:{id:string;name:string;version?:string}; expectations:ScenarioExpectation; }
@@ -16,7 +17,8 @@ const analyzers=[
   {namespace:'next',analyzer:nextAdapter.sourceAnalyzers![0]!},
   {namespace:'expo',analyzer:expoAdapter.sourceAnalyzers![0]!},
   {namespace:'tauri',analyzer:tauriAdapter.sourceAnalyzers![0]!},
-  {namespace:'supabase',analyzer:supabaseAdapter.sourceAnalyzers![0]!}
+  {namespace:'supabase',analyzer:supabaseAdapter.sourceAnalyzers![0]!},
+  {namespace:'drizzle',analyzer:drizzleAdapter.sourceAnalyzers![0]!}
 ];
 
 export async function listScenarios(root:string):Promise<ScenarioDefinition[]>{

@@ -4,7 +4,7 @@ import { constants } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { extname, join, relative, posix } from 'node:path';
 import type { ApplicationIR, SemanticEdge, SemanticNode } from '../../core/src/index.js';
-import type { ApplicationIRFragment, ExtensionSourceAnalyzer } from '../../extension-sdk/src/index.js';
+import type { ApplicationIRFragment, ExtensionSourceAnalyzer, ExtensionSourceContribution } from '../../extension-sdk/src/index.js';
 import { mergeApplicationIRFragments } from '../../semantic/src/index.js';
 
 const PARSER_VERSION = 'senten-source-v1';
@@ -36,7 +36,8 @@ export interface ParsedSourceFile {
   loc: number;
 }
 export interface DiscoveryStats { files: number; parsed: number; cacheHits: number; cacheMisses: number; nodes: number; edges: number; durationMs: number; }
-export interface DiscoveryResult { ir: ApplicationIR; files: ParsedSourceFile[]; stats: DiscoveryStats; frameworks: string[]; }
+export interface DiscoveryResult { ir: ApplicationIR; files: ParsedSourceFile[]; stats: DiscoveryStats; frameworks: string[]; workspacePackages?: WorkspacePackage[]; }
+export interface WorkspacePackage { name:string; root:string; }
 export interface SemanticDiff { addedNodes: SemanticNode[]; removedNodes: SemanticNode[]; changedNodes: { before: SemanticNode; after: SemanticNode }[]; addedEdges: SemanticEdge[]; removedEdges: SemanticEdge[]; breaking: string[]; }
 export interface ArchitectureManifest { schemaVersion:'0.1'; nodes:SemanticNode[]; edges:SemanticEdge[]; metadata?:Record<string,unknown>; }
 
@@ -47,27 +48,27 @@ function idSafe(input:string):string{return input.replace(/[^A-Za-z0-9_.\-/]+/g,
 
 export async function discoverSourceProject(cwd:string, application:ApplicationIR['application'], existing?:ApplicationIR, options:{force?:boolean; analyzers?:{namespace:string;analyzer:ExtensionSourceAnalyzer}[]}={}):Promise<DiscoveryResult>{
   const started=Date.now(); const cacheRoot=join(cwd,'.senten','cache','source'); await mkdir(join(cacheRoot,'objects'),{recursive:true});
-  const projectFrameworks=await detectProjectFrameworks(cwd); const paths=await collectSourceFiles(cwd,await loadSentenIgnore(cwd)); const files:ParsedSourceFile[]=[]; const extensionNodes:SemanticNode[]=[]; const extensionEdges:SemanticEdge[]=[]; const extensionFragments:ApplicationIRFragment[]=[]; const extensionFrameworks=new Set<string>(); let hits=0,misses=0,parsed=0;
+  const workspacePackages=await discoverWorkspacePackages(cwd); const projectFrameworks=await detectProjectFrameworks(cwd); const paths=await collectSourceFiles(cwd,await loadSentenIgnore(cwd)); const files:ParsedSourceFile[]=[]; const extensionNodes:SemanticNode[]=[]; const extensionEdges:SemanticEdge[]=[]; const extensionFragments:ApplicationIRFragment[]=[]; const extensionFrameworks=new Set<string>(); let hits=0,misses=0,parsed=0;
   for(const abs of paths){const content=await readFile(abs,'utf8');const rel=norm(relative(cwd,abs));const digest=hash(`${PARSER_VERSION}\0${content}`);const cachePath=join(cacheRoot,'objects',`${digest}.json`);
     let result:ParsedSourceFile;
     if(!options.force&&await exists(cachePath)){const cached=JSON.parse(await readFile(cachePath,'utf8')) as ParsedSourceFile;result={...cached,path:rel,hash:digest};hits++;}
     else{result=parseSource(rel,content,digest);await writeFile(cachePath,JSON.stringify(result));misses++;parsed++;}
     files.push(result);
-    for(const registration of options.analyzers??[]){const contribution=await registration.analyzer.analyze({path:rel,content,language:result.language,imports:result.imports.map(i=>i.specifier),exports:result.exports,projectFrameworks});for(const node of contribution.nodes??[])extensionNodes.push({...node,metadata:{discoveredBy:`extension:${registration.namespace}`,...node.metadata}});for(const edge of contribution.edges??[])extensionEdges.push({...edge,metadata:{discoveredBy:`extension:${registration.namespace}`,...edge.metadata}});if(contribution.fragment)extensionFragments.push({...contribution.fragment,source:{...contribution.fragment.source,adapter:contribution.fragment.source.adapter||registration.namespace,analyzer:contribution.fragment.source.analyzer??registration.analyzer.name,files:[...new Set([...(contribution.fragment.source.files??[]),rel])]}});for(const hint of [...(contribution.frameworkHints??[]),...(contribution.fragment?.frameworkHints??[])])extensionFrameworks.add(hint);}
+    for(const registration of options.analyzers??[]){const rawContribution=await registration.analyzer.analyze({path:rel,content,language:result.language,imports:result.imports.map(i=>i.specifier),exports:result.exports,projectFrameworks});const contribution=scopeContribution(rawContribution,rel,workspacePackages);for(const node of contribution.nodes??[])extensionNodes.push({...node,metadata:{discoveredBy:`extension:${registration.namespace}`,...node.metadata}});for(const edge of contribution.edges??[])extensionEdges.push({...edge,metadata:{discoveredBy:`extension:${registration.namespace}`,...edge.metadata}});if(contribution.fragment)extensionFragments.push({...contribution.fragment,source:{...contribution.fragment.source,adapter:contribution.fragment.source.adapter||registration.namespace,analyzer:contribution.fragment.source.analyzer??registration.analyzer.name,files:[...new Set([...(contribution.fragment.source.files??[]),rel])]}});for(const hint of [...(contribution.frameworkHints??[]),...(contribution.fragment?.frameworkHints??[])])extensionFrameworks.add(hint);}
   }
-  const graph=buildGraph(application,files); graph.nodes.push(...extensionNodes); graph.edges.push(...extensionEdges);
+  const graph=buildGraph(application,files,workspacePackages); graph.nodes.push(...extensionNodes); graph.edges.push(...extensionEdges);
   const manifest=await loadArchitectureManifest(cwd);
   if(manifest){for(const node of manifest.nodes)graph.nodes.push({...node,metadata:{declaredBy:'architecture-manifest',...node.metadata}});for(const edge of manifest.edges)graph.edges.push({...edge,metadata:{declaredBy:'architecture-manifest',...edge.metadata}});}
   graph.nodes=dedupeNodes(graph.nodes); graph.edges=dedupeEdges(graph.edges);
-  const retained=(existing?.nodes??[]).filter(n=>n.metadata?.discoveredBy!=='source-intelligence'&&n.kind!=='application');
-  const retainedEdges=(existing?.edges??[]).filter(e=>e.metadata?.discoveredBy!=='source-intelligence');
+  const retained=(existing?.nodes??[]).filter(n=>n.metadata?.discoveredBy!=='source-intelligence'&&!Array.isArray(n.metadata?.irFragmentProvenance)&&n.kind!=='application');
+  const retainedEdges=(existing?.edges??[]).filter(e=>e.metadata?.discoveredBy!=='source-intelligence'&&!Array.isArray(e.metadata?.irFragmentProvenance));
   const applicationNode:SemanticNode={id:`application:${application.id}`,kind:'application',label:application.name,metadata:{source:'senten'}};
   const nodeMap=new Map<string,SemanticNode>([[applicationNode.id,applicationNode],...retained.map(n=>[n.id,n] as const),...graph.nodes.map(n=>[n.id,n] as const)]);
   const edgeMap=new Map<string,SemanticEdge>();for(const e of [...retainedEdges,...graph.edges])edgeMap.set(`${e.from}\0${e.relation}\0${e.to}`,e);
   let ir:ApplicationIR={schemaVersion:'0.1',application,nodes:[...nodeMap.values()],edges:[...edgeMap.values()],generatedAt:new Date().toISOString()}; if(extensionFragments.length){ir=mergeApplicationIRFragments(ir,extensionFragments).ir;}
-  const frameworks=[...new Set([...projectFrameworks,...files.flatMap(f=>f.frameworkHints),...extensionFrameworks])].sort();
+  const generator=await isTemplateGenerator(cwd); const frameworks=[...new Set(generator?projectFrameworks:[...projectFrameworks,...files.flatMap(f=>f.frameworkHints),...extensionFrameworks])].sort();
   const cacheManifest={parserVersion:PARSER_VERSION,generatedAt:ir.generatedAt,files:files.map(f=>({path:f.path,hash:f.hash})),frameworks};await writeFile(join(cacheRoot,'manifest.json'),JSON.stringify(cacheManifest,null,2)+'\n');
-  return{ir,files,frameworks,stats:{files:files.length,parsed,cacheHits:hits,cacheMisses:misses,nodes:graph.nodes.length,edges:graph.edges.length,durationMs:Date.now()-started}};
+  return{ir,files,frameworks,workspacePackages,stats:{files:files.length,parsed,cacheHits:hits,cacheMisses:misses,nodes:graph.nodes.length,edges:graph.edges.length,durationMs:Date.now()-started}};
 }
 
 
@@ -86,8 +87,10 @@ async function loadArchitectureManifest(root:string):Promise<ArchitectureManifes
 
 async function detectProjectFrameworks(root:string):Promise<string[]>{
   try{
-    const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8')) as {dependencies?:Record<string,string>;devDependencies?:Record<string,string>};
+    const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8')) as {name?:string;dependencies?:Record<string,string>;devDependencies?:Record<string,string>};
     const deps={...(pkg.dependencies??{}),...(pkg.devDependencies??{})};const out=new Set<string>();
+    const name=(pkg.name??'').toLowerCase();
+    if(name.includes('tauri')&&(name.startsWith('create-')||await exists(join(root,'templates'))))out.add('tauri');
     if(deps.react)out.add('react');
     if(deps.next)out.add('next');
     if(deps.expo||deps['expo-router'])out.add('expo');
@@ -95,6 +98,7 @@ async function detectProjectFrameworks(root:string):Promise<string[]>{
     if(deps.vue)out.add('vue');
     if(deps['@angular/core'])out.add('angular');
     if(deps['@supabase/supabase-js'])out.add('supabase');
+    if(await isTemplateGenerator(root)&&out.has('tauri'))return ['tauri'];
     return [...out].sort();
   }catch{return [];}
 }
@@ -121,23 +125,32 @@ function parseSource(path:string,content:string,digest:string):ParsedSourceFile{
   const route=inferRoute(path,[...methods]);const test=/(^|\/)(__tests__\/|.*\.(test|spec)\.[cm]?[jt]sx?$)/.test(path);return{path,hash:digest,language:languageForExt(ext),imports,exports:[...new Set(exports)],symbols,calls:[...calls].sort(),frameworkHints:[...frameworkHints].sort(),...(route?{route}:{}),test,loc:content.split(/\r?\n/).length};
 }
 
-function inferRoute(path:string,methods:string[]):ParsedSourceFile['route']|undefined{const p=norm(path);let m=p.match(/(?:^|\/)app\/(.+)\/page\.[cm]?[jt]sx?$/);if(m){let route='/' + m[1]!.split('/').filter(x=>!x.startsWith('(')).join('/');route=route.replace(/\/index$/,'/');return{path:route==='/'?'/':route,kind:'page'};}if(/(?:^|\/)app\/page\.[cm]?[jt]sx?$/.test(p))return{path:'/',kind:'page'};m=p.match(/(?:^|\/)pages\/(.+)\.[cm]?[jt]sx?$/);if(m&&!m[1]!.startsWith('_')&&!m[1]!.startsWith('api/')){const route='/' + m[1]!.replace(/\/index$/,'');return{path:route||'/',kind:'page'};}m=p.match(/(?:^|\/)app\/(.+)\/route\.[cm]?[jt]s$/);if(m)return{path:'/'+m[1]!.split('/').filter(x=>!x.startsWith('(')).join('/'),kind:'api',methods};m=p.match(/(?:^|\/)pages\/api\/(.+)\.[cm]?[jt]s$/);if(m)return{path:'/api/'+m[1]!,kind:'api',methods};return undefined;}
+function canonicalRoute(raw:string):string{const cleaned=raw.split('/').filter(x=>x&&!x.startsWith('(')&&!x.startsWith('@')).join('/').replace(/\[\.\.\.([^\]]+)\]/g,':$1*').replace(/\[([^\]]+)\]/g,':$1').replace(/\/index$/,'');return cleaned?`/${cleaned.replace(/^\/+/, '')}`:'/';}
+function inferRoute(path:string,methods:string[]):ParsedSourceFile['route']|undefined{const p=norm(path);let m=p.match(/(?:^|\/)app\/(.+)\/page\.[cm]?[jt]sx?$/);if(m)return{path:canonicalRoute(m[1]!),kind:'page'};if(/(?:^|\/)app\/page\.[cm]?[jt]sx?$/.test(p))return{path:'/',kind:'page'};m=p.match(/(?:^|\/)pages\/(.+)\.[cm]?[jt]sx?$/);if(m&&!m[1]!.startsWith('_')&&!m[1]!.startsWith('api/'))return{path:canonicalRoute(m[1]!),kind:'page'};m=p.match(/(?:^|\/)app\/(.+)\/route\.[cm]?[jt]s$/);if(m)return{path:canonicalRoute(m[1]!),kind:'api',methods};m=p.match(/(?:^|\/)pages\/api\/(.+)\.[cm]?[jt]s$/);if(m)return{path:canonicalRoute('api/'+m[1]!),kind:'api',methods};return undefined;}
 function languageForExt(ext:string):string{return ext.includes('ts')?'typescript':'javascript';}
 
-function buildGraph(application:ApplicationIR['application'],files:ParsedSourceFile[]):{nodes:SemanticNode[];edges:SemanticEdge[]}{
-  const nodes:SemanticNode[]=[];const edges:SemanticEdge[]=[];const fileMap=new Map(files.map(f=>[f.path,f]));const sourceMeta={discoveredBy:'source-intelligence',discoveryVersion:PARSER_VERSION};
+function buildGraph(application:ApplicationIR['application'],files:ParsedSourceFile[],workspacePackages:WorkspacePackage[]):{nodes:SemanticNode[];edges:SemanticEdge[]}{
+  const nodes:SemanticNode[]=[];const edges:SemanticEdge[]=[];const fileMap=new Map(files.map(f=>[f.path,f]));const sourceMeta={discoveredBy:'source-intelligence',discoveryVersion:PARSER_VERSION};const scoped=workspacePackages.some(p=>p.root);const packageByName=new Map(workspacePackages.filter(p=>p.root).map(p=>[p.name,p]));
   const addNode=(n:SemanticNode)=>nodes.push({...n,metadata:{...sourceMeta,...n.metadata}});const addEdge=(e:SemanticEdge)=>edges.push({...e,metadata:{...sourceMeta,...e.metadata}});
-  for(const f of files){const fileId=`file:${f.path}`;addNode({id:fileId,kind:'file',label:f.path,source:f.path,metadata:{hash:f.hash,language:f.language,loc:f.loc,test:f.test,frameworks:f.frameworkHints}});addEdge({from:`application:${application.id}`,to:fileId,relation:'contains'});
+  if(scoped)for(const pkg of workspacePackages.filter(p=>p.root)){const mid=`module:${pkg.name}`;addNode({id:mid,kind:'module',label:pkg.name,source:pkg.root,metadata:{workspacePackage:true,workspaceRoot:pkg.root}});addEdge({from:`application:${application.id}`,to:mid,relation:'contains-package'});}
+  for(const f of files){const fileId=`file:${f.path}`;const owner=workspacePackageForPath(f.path,workspacePackages);addNode({id:fileId,kind:'file',label:f.path,source:f.path,metadata:{hash:f.hash,language:f.language,loc:f.loc,test:f.test,frameworks:f.frameworkHints,...(owner?.root?{workspacePackage:owner.name,workspaceRoot:owner.root}:{})}});addEdge({from:`application:${application.id}`,to:fileId,relation:'contains'});if(scoped&&owner?.root)addEdge({from:`module:${owner.name}`,to:fileId,relation:'contains'});
     if(f.test){const tid=`test:${idSafe(f.path)}`;addNode({id:tid,kind:'test',label:f.path,source:f.path});addEdge({from:tid,to:fileId,relation:'defined-in'});}
-    if(f.route){const rid=`route:${f.route.path}`;addNode({id:rid,kind:'route',label:f.route.path,source:f.path,metadata:{routeKind:f.route.kind,methods:f.route.methods??[]}});addEdge({from:rid,to:fileId,relation:'implemented-by'});}
-    for(const s of f.symbols){let kind:SemanticNode['kind']='symbol';if(s.reactComponent)kind='component';else if(s.actionLike)kind='action';else if(s.providerLike)kind='provider';else if(s.resourceLike)kind='resource';const sid=`${kind}:${idSafe(s.name)}@${f.path}`;addNode({id:sid,kind,label:s.name,source:f.path,metadata:{symbolKind:s.kind,exported:s.exported,line:s.line,async:s.async??false}});addEdge({from:sid,to:fileId,relation:'defined-in'});if(f.route&&kind==='action')addEdge({from:`route:${f.route.path}`,to:sid,relation:'dispatches'});}
+    if(f.route){const rid=semanticScopedId('route',f.route.path,f.path,workspacePackages);addNode({id:rid,kind:'route',label:f.route.path,source:f.path,metadata:{routeKind:f.route.kind,methods:f.route.methods??[],...(owner?.root?{workspacePackage:owner.name,workspaceRoot:owner.root}:{})}});addEdge({from:rid,to:fileId,relation:'implemented-by'});}
+    for(const s of f.symbols){let kind:SemanticNode['kind']='symbol';if(s.reactComponent)kind='component';else if(s.actionLike)kind='action';else if(s.providerLike)kind='provider';else if(s.resourceLike)kind='resource';const sid=`${kind}:${idSafe(s.name)}@${f.path}`;addNode({id:sid,kind,label:s.name,source:f.path,metadata:{symbolKind:s.kind,exported:s.exported,line:s.line,async:s.async??false}});addEdge({from:sid,to:fileId,relation:'defined-in'});if(f.route&&kind==='action')addEdge({from:semanticScopedId('route',f.route.path,f.path,workspacePackages),to:sid,relation:'dispatches'});}
   }
-  for(const f of files){const from=`file:${f.path}`;for(const imp of f.imports){const target=resolveImport(f.path,imp.specifier,fileMap);if(target)addEdge({from,to:`file:${target}`,relation:imp.typeOnly?'imports-type':'imports',metadata:{specifier:imp.specifier,names:imp.names}});else if(!imp.specifier.startsWith('.')&&!imp.specifier.startsWith('/')){const pkg=packageRoot(imp.specifier);const pid=`provider:package/${pkg}`;if(!nodes.some(n=>n.id===pid))addNode({id:pid,kind:'provider',label:pkg,metadata:{external:true,package:pkg}});addEdge({from,to:pid,relation:'uses-package'});}}
+  for(const f of files){const from=`file:${f.path}`;for(const imp of f.imports){const target=resolveImport(f.path,imp.specifier,fileMap);if(target)addEdge({from,to:`file:${target}`,relation:imp.typeOnly?'imports-type':'imports',metadata:{specifier:imp.specifier,names:imp.names}});else if(!imp.specifier.startsWith('.')&&!imp.specifier.startsWith('/')){const pkg=packageRoot(imp.specifier);const localPkg=packageByName.get(pkg);if(localPkg){const mid=`module:${localPkg.name}`;if(!nodes.some(n=>n.id===mid))addNode({id:mid,kind:'module',label:localPkg.name,source:localPkg.root,metadata:{workspacePackage:true,workspaceRoot:localPkg.root}});addEdge({from,to:mid,relation:'uses-workspace-package',metadata:{specifier:imp.specifier}});}else{const pid=`provider:package/${pkg}`;if(!nodes.some(n=>n.id===pid))addNode({id:pid,kind:'provider',label:pkg,metadata:{external:true,package:pkg}});addEdge({from,to:pid,relation:'uses-package'});}}}
   }
   return{nodes:dedupeNodes(nodes),edges:dedupeEdges(edges)};
 }
+
+function semanticScopedId(kind:string,value:string,source:string,packages:WorkspacePackage[]):string{const owner=workspacePackageForPath(source,packages);return owner?.root?`${kind}:${owner.root}:${value}`:`${kind}:${value}`;}
+function workspacePackageForPath(path:string,packages:WorkspacePackage[]):WorkspacePackage|undefined{const p=norm(path);return packages.filter(pkg=>pkg.root&&(p===pkg.root||p.startsWith(pkg.root+'/'))).sort((a,b)=>b.root.length-a.root.length)[0]??packages.find(pkg=>!pkg.root);}
+function scopeContribution(contribution:ExtensionSourceContribution,path:string,packages:WorkspacePackage[]):ExtensionSourceContribution{const owner=workspacePackageForPath(path,packages);if(!owner?.root)return contribution;const remap=new Map<string,string>();const scopedKinds=new Set(['route','action','resource','policy','invariant','capability','event','state','feature']);const mapNode=(node:SemanticNode):SemanticNode=>{if(!scopedKinds.has(node.kind)||node.id.includes(`:${owner.root}:`))return{...node,metadata:{...node.metadata,workspacePackage:owner.name,workspaceRoot:owner.root}};const prefix=`${node.kind}:`;const suffix=node.id.startsWith(prefix)?node.id.slice(prefix.length):node.id;const id=`${node.kind}:${owner.root}:${suffix}`;remap.set(node.id,id);return{...node,id,metadata:{...node.metadata,workspacePackage:owner.name,workspaceRoot:owner.root}};};const mapEdge=(edge:SemanticEdge):SemanticEdge=>({...edge,from:remap.get(edge.from)??edge.from,to:remap.get(edge.to)??edge.to});const nodes=(contribution.nodes??[]).map(mapNode);const fragmentNodes=(contribution.fragment?.nodes??[]).map(mapNode);const edges=(contribution.edges??[]).map(mapEdge);const fragmentEdges=(contribution.fragment?.edges??[]).map(mapEdge);return{...contribution,nodes,edges,...(contribution.fragment?{fragment:{...contribution.fragment,nodes:fragmentNodes,edges:fragmentEdges}}:{})};}
+async function discoverWorkspacePackages(root:string):Promise<WorkspacePackage[]>{const out:WorkspacePackage[]=[];async function walk(dir:string){const rel=norm(relative(root,dir));const pkgPath=join(dir,'package.json');if(await exists(pkgPath)){try{const pkg=JSON.parse(await readFile(pkgPath,'utf8')) as {name?:string};out.push({name:pkg.name||rel||'.',root:rel});}catch{}}for(const entry of await readdir(dir,{withFileTypes:true})){if(!entry.isDirectory()||DEFAULT_IGNORES.has(entry.name))continue;await walk(join(dir,entry.name));}}await walk(root);const unique=new Map(out.map(pkg=>[pkg.root,pkg]));return [...unique.values()].sort((a,b)=>a.root.localeCompare(b.root));}
+async function isTemplateGenerator(root:string):Promise<boolean>{try{const pkg=JSON.parse(await readFile(join(root,'package.json'),'utf8')) as {name?:string};const name=(pkg.name??'').toLowerCase();return (name.startsWith('create-')||name.endsWith('-generator')||name.includes('scaffold'))&&await exists(join(root,'templates'));}catch{return false;}}
 function packageRoot(spec:string):string{if(spec.startsWith('@'))return spec.split('/').slice(0,2).join('/');return spec.split('/')[0]!;}
-function resolveImport(from:string,spec:string,files:Map<string,ParsedSourceFile>):string|undefined{if(!spec.startsWith('.'))return undefined;const normalizedFrom=norm(from);const base=posix.normalize(posix.join(posix.dirname(normalizedFrom),spec)).replace(/^\.\//,'');const candidates=[base,...['.ts','.tsx','.js','.jsx','.mts','.cts','.mjs','.cjs'].map(x=>base+x),...['index.ts','index.tsx','index.js','index.jsx'].map(x=>`${base}/${x}`)];return candidates.find(c=>files.has(c));}
+function importCandidates(base:string):string[]{const clean=base.replace(/^\.\//,'').replace(/^\//,'');return[clean,...['.ts','.tsx','.js','.jsx','.mts','.cts','.mjs','.cjs'].map(x=>clean+x),...['index.ts','index.tsx','index.js','index.jsx'].map(x=>`${clean}/${x}`)];}
+function resolveImport(from:string,spec:string,files:Map<string,ParsedSourceFile>):string|undefined{const normalizedFrom=norm(from);if(spec.startsWith('.')){const base=posix.normalize(posix.join(posix.dirname(normalizedFrom),spec));return importCandidates(base).find(c=>files.has(c));}if(spec.startsWith('/'))return undefined;const aliasBase=spec.startsWith('@/')||spec.startsWith('~/')?spec.slice(2):spec;const top=aliasBase.split('/')[0];const localRoots=new Set([...files.keys()].map(x=>x.split('/')[0]));if((spec.startsWith('@/')||spec.startsWith('~/')||localRoots.has(top))){const found=importCandidates(aliasBase).find(c=>files.has(c));if(found)return found;}return undefined;}
 function dedupeNodes(nodes:SemanticNode[]):SemanticNode[]{const m=new Map<string,SemanticNode>();for(const n of nodes){const prev=m.get(n.id);m.set(n.id,prev?{...prev,...n,metadata:{...prev.metadata,...n.metadata}}:n);}return[...m.values()];}
 function dedupeEdges(edges:SemanticEdge[]):SemanticEdge[]{const m=new Map<string,SemanticEdge>();for(const e of edges)m.set(`${e.from}\0${e.relation}\0${e.to}`,e);return[...m.values()];}
 

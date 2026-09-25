@@ -7,7 +7,7 @@ const read=(p:string)=>readFile(p,'utf8');
 test('root package is publishable and keeps source-intelligence runtime dependency', async()=>{
   const pkg=JSON.parse(await read('package.json')) as {private?:boolean;version:string;files?:string[];dependencies?:Record<string,string>;publishConfig?:{tag?:string}};
   assert.notEqual(pkg.private,true);
-  assert.equal(pkg.version,'1.0.0-rc.3');
+  assert.equal(pkg.version,'1.0.0-rc.8');
   assert.ok(pkg.files?.includes('dist/packages/'));
   assert.ok(pkg.files?.includes('dist/adapters/'));
   assert.ok(pkg.files?.includes('dist/integrations/'));

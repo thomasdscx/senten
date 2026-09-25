@@ -1,6 +1,11 @@
 # Senten
 
-**Architecture for Living Software.**
+**Architecture for Living Software.
+
+### Release candidate 1.0.0-rc.6
+
+RC6 hardens existing-app adoption before the stable 1.0 release: idempotent initialization, explicit `--init` bootstrapping, workspace-scoped monorepo semantics, local workspace dependency modeling, ancestor Git/CI awareness, and safer framework/security classification.
+**
 
 Senten is a framework-agnostic semantic application architecture framework for building, understanding, testing, securing, reusing, remembering, and safely evolving software across web, mobile, desktop, server, edge, and AI-agent environments.
 
@@ -469,6 +474,28 @@ Senten treats repositories, plugins, agents, packages, and external effects as p
 
 The full threat model continues with the hardened Sandbox and package-signing builds.
 
+## Learning and knowledge packs
+
+Senten 1.0 introduces an evidence-backed learning layer. `senten learn` studies the current project, proposes conventions and mappings, and keeps them as candidates until a human approves them. Confidence is not evidence and learning is never silently promoted to truth.
+
+```bash
+senten learn
+senten learn candidates
+senten learn approve <candidate-id>
+senten learn package --name my-team-platform
+senten learn install .senten/learn/packages/my-team-platform
+```
+
+External source learning is static-only by default and currently accepts public GitHub repositories:
+
+```bash
+senten learn source https://github.com/facebook/react --ref v19.1.0
+```
+
+Senten performs a shallow fetch and inventory only. It does not run package installers, lifecycle scripts, or repository code. Language analyzers explain syntax; framework/vendor adapters map technology-specific behavior into Application IR; knowledge packs add versioned semantic knowledge; project learning captures team-specific conventions.
+
+Knowledge packs are ordinary signed/verifiable Senten packages with kind `knowledge-pack`, so teams can keep them local, publish them to a private registry, or share public packs without modifying Senten Core.
+
 ## License
 
 Apache-2.0.
@@ -578,3 +605,34 @@ Senten is now on the `1.0.0-rc.1` line. RC protocol markers are candidate-frozen
 ## Runtime support
 
 Node.js 22.5+ is the canonical Senten runtime for RC1. Bun is an experimental compatibility target. Docker distributions include their own runtime. See `docs/RUNTIME_SUPPORT.md`.
+
+
+## Dogfood and audit recording
+
+Senten can persist a structured execution record while you evaluate a project:
+
+```bash
+senten record start dogfood-project
+senten discover
+senten adopt --details
+senten compatibility
+senten record stop
+senten record export --format md
+```
+
+The resulting Markdown/JSON record lives in `.senten/records/` and contains command outcomes plus the final adoption snapshot. See `docs/SENTEN_RECORDING.md`.
+
+## Remote repositories and secure learning
+
+Senten can inspect and learn from GitHub repositories without cloning them into your project:
+
+```bash
+senten auth github login
+senten repo inspect owner/repository
+senten learn source owner/repository
+senten learn storage
+```
+
+Remote learning is static-only by default. Senten reads repository metadata, tree entries, and a bounded set of relevant text blobs through the GitHub API; it does not run package installs, lifecycle scripts, builds, or repository code. Raw remote source is not retained after analysis. The persistent artifact stores compact language/manifest inventory, package/framework/dependency knowledge, hashes, commit/tree provenance, and storage limits. Tokens are sourced from GitHub CLI credentials or process environment variables and are not written into project configuration, `.senten` state, SQLite, or knowledge packs.
+
+See `docs/REMOTE_REPOSITORIES_AND_LEARNING.md` for the security and storage model.

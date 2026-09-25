@@ -99,7 +99,7 @@ test('Build 30 RC compatibility contract exposes frozen candidate protocol ident
 
 test('Build 30 root package is release candidate and publishes under rc tag',async()=>{
   const pkg=JSON.parse(await readFile('package.json','utf8')) as {version:string;publishConfig?:{tag?:string}};
-  assert.equal(pkg.version,'1.0.0-rc.3');
+  assert.equal(pkg.version,'1.0.0-rc.8');
   assert.equal(pkg.publishConfig?.tag,'rc');
 });
 
@@ -124,8 +124,8 @@ test('Build 30 doctor exposes stale CLI versus Senten repository version mismatc
     run=spawnSync(process.execPath,[entry,'doctor','--json'],{cwd,encoding:'utf8'});
     const report=JSON.parse(run.stdout) as {version:string;checks:Array<{name:string;ok:boolean;detail:string}>};
     const alignment=report.checks.find(c=>c.name==='CLI/source version alignment');
-    assert.equal(report.version,'1.0.0-rc.3');
+    assert.equal(report.version,'1.0.0-rc.8');
     assert.equal(alignment?.ok,false);
-    assert.match(alignment?.detail??'',/running 1\.0\.0-rc\.3; repository package\.json is 9\.9\.9/);
+    assert.match(alignment?.detail??'',/running 1\.0\.0-rc\.8; repository package\.json is 9\.9\.9/);
   }finally{await cleanup(cwd);}
 });

@@ -156,7 +156,7 @@ export type MemoryKind = 'rule' | 'decision' | 'convention' | 'instruction' | 's
 export interface MemoryRecord { id: string; kind: MemoryKind; scope: MemoryScope; scopeId?: string; subject?: string; value: string; source: string; actor: ActorIdentity; createdAt: string; updatedAt: string; expiresAt?: string; confidence?: number; status: 'active' | 'superseded' | 'expired'; metadata?: Record<string, unknown>; }
 
 export interface ProfileRecord { id: string; name: string; description?: string; settings: Record<string, unknown>; createdAt: string; updatedAt: string; }
-export type PackageKind = 'adapter' | 'integration' | 'template' | 'blueprint' | 'profile' | 'workflow' | 'skill' | 'provider' | 'policy-pack' | 'journey';
+export type PackageKind = 'adapter' | 'integration' | 'template' | 'blueprint' | 'profile' | 'workflow' | 'skill' | 'provider' | 'policy-pack' | 'journey' | 'knowledge-pack';
 
 export type InteractionSeverity = 'info'|'warning'|'error';
 export interface InteractionNodeRecord { id:string; runId:string; url:string; kind:'page'|'button'|'form'|'input'|'control'; label?:string; status?:number; title?:string; metadata?:Record<string,unknown>; }

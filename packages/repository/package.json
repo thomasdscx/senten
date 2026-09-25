@@ -1,0 +1,6 @@
+{
+  "name": "@senten/repository",
+  "version": "1.0.0-rc.8",
+  "license": "Apache-2.0",
+  "type": "module"
+}

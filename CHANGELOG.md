@@ -1,9 +1,57 @@
-## 1.0.0-rc.3
+# 1.0.0-rc.8 — Remote Repository & Secure Learning Candidate
 
-- Harden framework adapter activation to use parsed imports and project dependency signals instead of raw detector substrings.
-- Prevent Senten adapter/test implementation text from falsely reporting Next.js, Expo, Supabase, or Tauri as application frameworks.
-- Suppress route-adapter recommendations for non-route-bearing library/CLI projects.
-- Add dogfood regression coverage for framework self-pollution.
+- Added provider-neutral remote repository foundation with first-party GitHub read support.
+- Added `senten repo inspect|tree|permissions` without requiring a local clone.
+- Added `senten auth github status|login`; Senten never persists GitHub tokens in project state.
+- `senten learn source` now uses GitHub tree/blob APIs instead of cloning repositories.
+- External learning retains only compact metadata/knowledge artifacts; raw remote source is not persisted.
+- Added remote-learning storage budgets, sensitive-file filters, provenance by commit/tree SHA, and `senten learn storage|prune`.
+- Added compact framework/package/dependency knowledge extraction from manifests.
+- Added regression tests proving remote learning retains no raw source tree.
+
+# 1.0.0-rc.7 — Learning & Adapter Ecosystem Candidate
+
+- Added `senten learn` project learning with evidence-backed candidates, confidence, human approval/rejection, and project-scoped memory promotion.
+- Added reusable `knowledge-pack` package kind plus build/install flows.
+- Added static-only public GitHub source ingestion with generic language/manifest inventory; no package installation or repository code execution.
+- Formalized the release architecture: language/source analyzers parse syntax, framework/vendor adapters emit Application IR, knowledge packs carry versioned semantics, and project learning captures local/team conventions.
+- Added `learning.manage` agent capability boundary.
+- Preserved the rule that confidence is not evidence and learned candidates are not silently promoted to truth.
+
+## 1.0.0-rc.6 — Public Release Hardening
+
+- Make `senten init` idempotent: rerunning it on a healthy Senten project succeeds without overwriting configuration or requiring `--force`.
+- Add explicit `--init` convenience bootstrapping for state-dependent commands such as `senten record start ... --init`.
+- Replace raw stack traces for ordinary CLI usage errors with concise user-facing messages; set `SENTEN_DEBUG=1` to include stack traces.
+- Add workspace-scoped semantic identity for monorepo routes and adapter-emitted actions/resources so identical paths in separate apps no longer collapse into one node.
+- Model local workspace packages as `module:*` nodes and `uses-workspace-package` edges instead of misclassifying them as external providers.
+- Attach workspace ownership metadata to files and scoped semantic nodes.
+- Resolve the containing Git worktree from nested projects, allowing release checks and adoption analysis to see repository-level Git and CI state.
+- Surface repository-root GitHub Actions to nested workspace projects.
+- Surface framework and workspace signals in adoption reports, including Expo and Tauri discoveries.
+- Refine framework detection for scaffold/template-generator repositories so supported templates are not reported as simultaneously active frameworks.
+- Stop treating ordinary routes without recognized authentication as a security warning by default; policy recommendations now depend on detected auth, actions, or resources.
+- Add RC6 regression coverage for monorepo route collisions, workspace dependencies, generator framework classification, init idempotence, and `--init` bootstrapping.
+
+## 1.0.0-rc.5 — Recording Export Repair
+
+- Fixes `senten record export --format md|json` so option values are not misread as recording IDs.
+- Preserves export-by-record-ID behavior and default export of the latest completed recording.
+- Adds regression coverage for the exact external-dogfood command sequence.
+
+## 1.0.0-rc.5 — External Dogfood Hardening
+
+- Canonicalize Next.js dynamic and catch-all routes so source intelligence and framework adapters converge on one semantic route identity.
+- Prevent repeated rediscovery from duplicating adapter-generated edges or provenance records.
+- Resolve project-root and common alias imports before classifying imports as external package providers, eliminating false providers such as `provider:package/app`.
+- Add a first-party Drizzle ORM adapter that extracts table resources and inferred action read/write relationships.
+- Refine security adoption semantics so detected authentication without Senten policy mapping is `detected-but-unmapped`, not falsely reported as a security failure.
+- Reserve critical security adoption gaps for explicit evidence such as routes declared `security: unprotected`.
+- Replace coarse semantic coverage with an explainable, applicability-aware coverage breakdown; `senten adopt --details` shows the contributing dimensions.
+- Separate generic application release readiness from package/RC publishing hygiene; package metadata gates run under `--package` or `--rc`.
+- Add `senten record` for structured dogfood/audit sessions with JSON persistence and human-readable Markdown export.
+- Extend the trusted npm publish workflow with the stable `latest` channel while retaining OIDC provenance and the `npm-release` environment.
+- Add regression fixtures derived from the first two external dogfood repositories.
 
 ## 1.0.0-rc.1 — Builds 26–30 Release Candidate Hardening
 

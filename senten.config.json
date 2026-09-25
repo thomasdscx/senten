@@ -1,7 +1,8 @@
 {
   "application": {
-    "id": "senten-v1-0-0-rc-2",
-    "name": "senten-v1.0.0-rc.2"
+    "id": "senten",
+    "name": "Senten",
+    "version": "1.0.0-rc.6"
   },
   "environment": "development",
   "extensions": [

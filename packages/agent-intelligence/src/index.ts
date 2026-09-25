@@ -27,6 +27,7 @@ export function commandCapability(command:string):string{
   const readOnly=new Set(['inspect','explain','why','graph','impact','history','recall','source','diff','drift','paths','doctor','proof','guarantee','extensions','report','observatory','assurance','compatibility']);
   if(readOnly.has(command))return 'project.read';
   if(command==='discover'||command==='adopt'||command==='declare'||command==='relate')return 'semantic.write';
+  if(command==='learn')return 'learning.manage';
   if(command==='crawl'||command==='clickthru'||command==='journey')return 'interaction.execute';
   if(command==='runtime')return 'runtime.observe';
   if(command==='evidence')return 'evidence.write';

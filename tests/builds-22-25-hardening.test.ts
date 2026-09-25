@@ -58,7 +58,7 @@ test('Build 24 local sandbox never overstates host-process containment',()=>{
   assert.throws(()=>assertSandboxEffectBoundary(record,{command:'node',effectIntent:'mutating'}));
 });
 
-test('Build 25 adoption report models workspace/readiness and critical route-policy gap',async()=>{
+test('Build 25 adoption report models workspace/readiness without treating ordinary routes as a security failure',async()=>{
   const cwd=await mkdtemp(join(tmpdir(),'senten-adoption-hardening-'));
   try{
     await writeFile(join(cwd,'package.json'),JSON.stringify({packageManager:'npm@10.9.2',workspaces:['apps/*'],scripts:{test:'node --test'},dependencies:{next:'16.0.0'}}));
@@ -68,7 +68,8 @@ test('Build 25 adoption report models workspace/readiness and critical route-pol
     const report=await analyzeAdoption(cwd,ir);
     assert.equal(report.workspace.kind,'npm-workspaces');
     assert.equal(report.workspace.packageManager,'npm@10.9.2');
-    assert.ok(report.gaps.some(g=>g.id==='security.routes-without-policy'&&g.severity==='critical'));
+    assert.equal(report.gaps.some(g=>g.id==='security.security-unmapped'&&g.severity==='warning'),false);
+    assert.equal(report.gaps.some(g=>g.category==='security'&&g.severity==='critical'),false);
     assert.ok(report.readiness.score<75);
   }finally{await rm(cwd,{recursive:true,force:true,maxRetries:5,retryDelay:50});}
 });
