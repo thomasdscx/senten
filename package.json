@@ -1,6 +1,6 @@
 {
   "name": "senten",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": false,
   "description": "Semantic application architecture for secure, explainable, cross-platform living software.",
   "license": "Apache-2.0",
