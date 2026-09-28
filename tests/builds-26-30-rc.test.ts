@@ -106,7 +106,7 @@ test('Build 30 root package is stable and publishes publicly',async()=>{
     };
   };
 
-  assert.equal(pkg.version,'1.0.0');
+  assert.match(pkg.version,/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
   assert.equal(pkg.publishConfig?.access,'public');
   assert.equal(pkg.publishConfig?.tag,undefined);
 });

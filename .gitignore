@@ -11,3 +11,8 @@ Thumbs.db
 
 release/
 senten-*.tgz
+*.tgz
+site/node_modules/
+site/dist/
+site/.astro/
+site/

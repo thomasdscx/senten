@@ -922,7 +922,7 @@ Automation can be powerful without becoming unbounded.
 
 # Status
 
-**Current stable release: `1.0.0`**
+**Current stable release:** see the npm version badge above.
 
 Install:
 

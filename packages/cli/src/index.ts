@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { access, appendFile, copyFile, cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
@@ -38,7 +40,27 @@ import { exportScenarioArtifacts, listScenarios, runScenario } from '../../scena
 import { buildKnowledgePack, candidateToMemory, inferProjectKnowledge, ingestExternalSource, learningStorage, loadKnowledgePack, pruneLearningStorage, readLearningSnapshot, updateAllLearningCandidates, updateLearningCandidate, writeLearningSnapshot } from '../../learning/src/index.js';
 import { GitHubRepositoryProvider, githubCredentialStatus } from '../../repository/src/index.js';
 
-const VERSION = '1.0.0';
+
+function resolvePackageVersion(): string {
+  let current = dirname(fileURLToPath(import.meta.url));
+  for (let depth = 0; depth < 8; depth += 1) {
+    const candidate = join(current, 'package.json');
+    try {
+      const parsed = JSON.parse(readFileSync(candidate, 'utf8')) as { name?: string; version?: string };
+      if (parsed.name === 'senten' && typeof parsed.version === 'string' && parsed.version.length > 0) {
+        return parsed.version;
+      }
+    } catch {
+      // Continue walking toward the package root.
+    }
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  throw new Error('Unable to resolve Senten package version from package.json');
+}
+const VERSION = resolvePackageVersion();
+
 const CORE_COMMANDS = ['welcome','init','record','learn','repo','auth','adopt','declare','relate','why','lineage','capability','simulate','compatibility','create','use','discover','source','baseline','diff','drift','inspect','explain','graph','impact','element','history','undo','redo','session','transaction','checkpoint','rollback','memory','recall','profile','template','blueprint','registry','package','trust','workflow','cache','extensions','sandbox','crawl','clickthru','journey','paths','runtime','evidence','guarantee','assurance','launchproof','agent','context','commands','mcp','doctor','proof','report','observatory','release','benchmark','schema','scenario','showcase'] as const;
 
 async function mainImpl(argv: string[]): Promise<void> {
@@ -490,7 +512,7 @@ async function workflowCommand(cwd:string,args:string[],registry:ExtensionRegist
   if(action==='list'){const local=join(cwd,'.senten','workflows');if(await exists(local))for(const file of (await readdir(local)).filter(x=>x.endsWith('.json')).sort()){try{const path=join(local,file);const raw=JSON.parse(await readFile(path,'utf8')) as WorkflowDefinition;if(!raw.steps.length&&raw.metadata?.draft===true)console.log(`${raw.name.padEnd(24)} ${raw.version}  DRAFT`);else{validateWorkflow(raw);console.log(`${raw.name.padEnd(24)} ${raw.version}  ${raw.description??''}`);}}catch{console.log(`${file.padEnd(24)} INVALID`);}}const config=await loadConfig(cwd);for(const r of config.registries??[]){if(r.type!=='local')continue;for(const e of await new LocalRegistry({...r,location:resolve(cwd,r.location)}).list())if(e.manifest.kind==='workflow')console.log(`${r.name}/${e.manifest.name.padEnd(18)} ${e.manifest.version}  registry`);}return;}
   if(action==='inspect'){const name=args[1];if(!name)throw new Error('Usage: senten workflow inspect <name|run-id>');const store=await LocalStateStore.open(cwd);try{const run=store.getWorkflowRun(name);if(run){console.log(JSON.stringify(run,null,2));return;}}finally{store.close();}const local=join(cwd,'.senten','workflows',`${slug(name)}.json`);if(await exists(local)){console.log(await readFile(local,'utf8'));return;}const resolved=await resolveWorkflow(cwd,name);console.log(JSON.stringify(resolved.definition,null,2));return;}
   if(action==='history'){const name=args[1]&&!args[1].startsWith('-')?args[1]:undefined;const store=await LocalStateStore.open(cwd);try{const rows=store.listWorkflowRuns(name).slice().reverse();if(args.includes('--json')){console.log(JSON.stringify(rows,null,2));return;}if(!rows.length){console.log('No workflow runs.');return;}for(const run of rows)console.log(`${run.id}  ${run.status.padEnd(11)} ${run.workflow.padEnd(22)} ${run.startedAt}  ${run.actor.type}:${run.actor.id}`);return;}finally{store.close();}}
-  if(action==='package'){const name=args[1];if(!name)throw new Error('Usage: senten workflow package <name>');const resolved=await resolveWorkflow(cwd,name);const root=join(cwd,'.senten','packages',`workflow-${slug(resolved.definition.name)}`);await rm(root,{recursive:true,force:true});await mkdir(join(root,'payload'),{recursive:true});const text=JSON.stringify(resolved.definition,null,2)+'\n';await writeFile(join(root,'payload','workflow.json'),text);const digest=sha256(text);const manifest={senten:1 as const,kind:'workflow' as const,name:resolved.definition.name,version:resolved.definition.version,description:resolved.definition.description,files:['workflow.json'],integrity:{algorithm:'sha256' as const,files:{'workflow.json':digest},packageDigest:sha256(`workflow.json:${digest}`)},compatibility:{senten:'>=0.8.0 <1.0.0',node:'>=22.5.0'},metadata:{source:'senten-workflow'}};await writeFile(join(root,'senten.package.json'),JSON.stringify(manifest,null,2)+'\n');console.log(`WORKFLOW PACKAGE ${manifest.name}@${manifest.version}\nPath ${relative(cwd,root)}`);return;}
+  if(action==='package'){const name=args[1];if(!name)throw new Error('Usage: senten workflow package <name>');const resolved=await resolveWorkflow(cwd,name);const root=join(cwd,'.senten','packages',`workflow-${slug(resolved.definition.name)}`);await rm(root,{recursive:true,force:true});await mkdir(join(root,'payload'),{recursive:true});const text=JSON.stringify(resolved.definition,null,2)+'\n';await writeFile(join(root,'payload','workflow.json'),text);const digest=sha256(text);const manifest={senten:1 as const,kind:'workflow' as const,name:resolved.definition.name,version:resolved.definition.version,description:resolved.definition.description,files:['workflow.json'],integrity:{algorithm:'sha256' as const,files:{'workflow.json':digest},packageDigest:sha256(`workflow.json:${digest}`)},compatibility:{senten:'>=1.0.0 <2.0.0',node:'>=22.5.0'},metadata:{source:'senten-workflow'}};await writeFile(join(root,'senten.package.json'),JSON.stringify(manifest,null,2)+'\n');console.log(`WORKFLOW PACKAGE ${manifest.name}@${manifest.version}\nPath ${relative(cwd,root)}`);return;}
   if(action==='install'){const name=args[1];if(!name)throw new Error('Usage: senten workflow install <registry/name|name>');const resolved=await resolveWorkflow(cwd,name);const dir=join(cwd,'.senten','workflows');await mkdir(dir,{recursive:true});const path=join(dir,`${slug(resolved.definition.name)}.json`);if(await exists(path)&&!args.includes('--force'))throw new Error(`Workflow already installed: ${resolved.definition.name}. Use --force to replace.`);await writeFile(path,JSON.stringify(resolved.definition,null,2)+'\n');console.log(`WORKFLOW INSTALLED ${resolved.definition.name}`);return;}
   if(action==='run'){const name=args[1];if(!name)throw new Error('Usage: senten workflow run <name> [--input key=value] [--dry-run]');return runWorkflow(cwd,name,args.slice(2),registry);}
   throw new Error('Usage: senten workflow <list|create|add|remove|move|clear|steps|validate|inspect|run|history|package|install>');

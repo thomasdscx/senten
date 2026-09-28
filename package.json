@@ -17,15 +17,16 @@
     "clean": "node scripts/clean.mjs",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test --test-concurrency=1 dist/tests/*.test.js",
+    "test": "node scripts/verify-test-build.mjs && node --test --test-concurrency=1 dist/tests/*.test.js",
     "senten": "node bin/senten.mjs",
-    "preflight": "npm run clean && npm run typecheck && npm run build && npm test",
+    "preflight": "npm run clean && npm run typecheck && npm test",
     "prepack": "npm run clean && npm run build",
     "pack:dry-run": "npm pack --dry-run --ignore-scripts",
     "release:verify": "npm run preflight && npm run pack:dry-run",
     "release:artifacts": "node scripts/release-artifacts.mjs",
     "showcase:build": "npm run build && node scripts/build-showcase.mjs",
-    "self:proof": "npm run build && node scripts/self-proof.mjs"
+    "self:proof": "npm run build && node scripts/self-proof.mjs",
+    "pretest": "npm run build"
   },
   "engines": {
     "node": ">=22.5"

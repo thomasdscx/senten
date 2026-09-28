@@ -16,7 +16,7 @@ test('root package is publishable and keeps source-intelligence runtime dependen
   };
 };
   assert.notEqual(pkg.private,true);
-  assert.equal(pkg.version,'1.0.0');
+  assert.match(pkg.version,/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
   assert.equal(pkg.publishConfig?.access,'public');
   assert.equal(pkg.publishConfig?.tag,undefined);
   assert.ok(pkg.files?.includes('dist/packages/'));
