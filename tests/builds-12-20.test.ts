@@ -65,7 +65,9 @@ test('Build 20 compatibility boundary recognizes current Application IR',()=>{
 
 test('Build 12 npm workflow uses OIDC trusted-publishing shape and no long-lived NPM token',async()=>{
   const workflow=await readFile('.github/workflows/publish-npm.yml','utf8');
-  assert.match(workflow,/id-token: write/);
-  assert.match(workflow,/npm publish --provenance/);
-  assert.doesNotMatch(workflow,/NPM_TOKEN/);
+  assert.match(workflow,/id-token:\s*write/);
+  assert.match(workflow,/npm install --global npm@\^11\.5\.1/);
+  assert.match(workflow,/npm stage publish/);
+  assert.doesNotMatch(workflow,/NPM_TOKEN|NODE_AUTH_TOKEN/);
+  assert.doesNotMatch(workflow,/npm publish --provenance/); 
 });
