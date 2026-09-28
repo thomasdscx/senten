@@ -38,7 +38,7 @@ import { exportScenarioArtifacts, listScenarios, runScenario } from '../../scena
 import { buildKnowledgePack, candidateToMemory, inferProjectKnowledge, ingestExternalSource, learningStorage, loadKnowledgePack, pruneLearningStorage, readLearningSnapshot, updateAllLearningCandidates, updateLearningCandidate, writeLearningSnapshot } from '../../learning/src/index.js';
 import { GitHubRepositoryProvider, githubCredentialStatus } from '../../repository/src/index.js';
 
-const VERSION = '1.0.0-rc.8';
+const VERSION = '1.0.0';
 const CORE_COMMANDS = ['welcome','init','record','learn','repo','auth','adopt','declare','relate','why','lineage','capability','simulate','compatibility','create','use','discover','source','baseline','diff','drift','inspect','explain','graph','impact','element','history','undo','redo','session','transaction','checkpoint','rollback','memory','recall','profile','template','blueprint','registry','package','trust','workflow','cache','extensions','sandbox','crawl','clickthru','journey','paths','runtime','evidence','guarantee','assurance','launchproof','agent','context','commands','mcp','doctor','proof','report','observatory','release','benchmark','schema','scenario','showcase'] as const;
 
 async function mainImpl(argv: string[]): Promise<void> {

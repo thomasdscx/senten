@@ -636,3 +636,269 @@ senten learn storage
 Remote learning is static-only by default. Senten reads repository metadata, tree entries, and a bounded set of relevant text blobs through the GitHub API; it does not run package installs, lifecycle scripts, builds, or repository code. Raw remote source is not retained after analysis. The persistent artifact stores compact language/manifest inventory, package/framework/dependency knowledge, hashes, commit/tree provenance, and storage limits. Tokens are sourced from GitHub CLI credentials or process environment variables and are not written into project configuration, `.senten` state, SQLite, or knowledge packs.
 
 See `docs/REMOTE_REPOSITORIES_AND_LEARNING.md` for the security and storage model.
+
+## RC9 lifecycle and truthfulness hardening
+
+Senten 1.0.0-rc.9 adds explicit repository-understanding boundaries for mixed-language applications. Adoption reports now distinguish repository-wide source inventory from semantically modeled source, and surface unsupported/unmodeled files instead of treating unknown code as passed coverage.
+
+New operational commands:
+
+```bash
+senten status
+senten capabilities
+senten report session start dogfood
+senten report session stop
+senten purge --dry-run
+senten purge
+senten reset
+senten remove --dry-run
+senten remove
+```
+
+`purge` removes generated `.senten/` state while preserving `senten.config.json`. `reset` recreates fresh local state using the existing configuration. `remove` removes Senten project state and configuration while preserving application source, `senten.architecture.json`, and Git history.
+
+Framework signals now require stronger corroboration to reduce false positives. Rails/Ruby repositories are detected explicitly as detection-level support until full semantic adapters are available, including dependency-backed security signals such as Devise and Pundit.
+
+## RC10: Machine contracts, findings, and security context
+
+RC10 keeps Senten provider-neutral while making it easier for IDEs, agents, CI systems, internal developer platforms, security tools, LaunchProof, and LobeWork to build on stable machine-readable contracts.
+
+```bash
+senten contract
+senten contract --json
+```
+
+External scanner findings can be normalized from SARIF or generic JSON into `senten.finding.v1` and attached to StateTruss:
+
+```bash
+senten finding import opengrep.sarif --provider opengrep
+senten findings
+senten finding <id>
+senten impact finding:<id>
+```
+
+Senten does not claim to replace a SAST/DAST/SCA or penetration-testing engine. It supplies architectural context around evidence produced by those tools:
+
+```bash
+senten security status
+senten security surface
+senten security boundaries
+senten security exposure
+senten security status --json
+```
+
+Security context uses the versioned `senten.security-context.v1` contract. Unknown route protection remains **unknown**; Senten never converts missing evidence into a pass.
+
+Evidence-oriented exports are available for other tools such as LaunchProof:
+
+```bash
+senten report security --format json
+senten report security --format md
+senten report findings --format json
+senten report findings --format md
+```
+
+The intended integration model is: scanners discover candidate findings, Senten maps them onto application architecture and blast radius, and assurance tools such as LaunchProof evaluate evidence and release policy.
+
+
+## RC11 large-repository hardening
+
+Long-running discovery emits live terminal progress when attached to a TTY and tracks the entire discovery lifecycle: workspace detection → framework detection → repository inventory → cache/parsing → semantic graph → discovery manifest → StateTruss persistence → state metadata → finalization. Current-phase progress and overall command progress are shown separately so a completed graph phase is never mistaken for a completed command. Large repositories receive a clear notice that full discovery may take several minutes. Completed cache work is preserved on cancellation, and explicit budgets such as `senten discover --timeout 10m`, `senten discover --stall-timeout 2m`, and `senten discover --stall-warn 30s` remain available.
+
+Warm discovery also records whether the persisted StateTruss graph was unchanged and reused. Detailed reports include per-phase timings, cache metrics, graph reuse, framework understanding boundaries (detected / modeled / detection-only), and security-context wording that distinguishes architectural evidence from proven authentication or authorization controls. Use `senten report start` and `senten report stop` for auto-named detailed verification sessions.
+
+## RC14 workflow, environment, adapter, and safety hardening
+
+RC14 turns Senten workflows into local, editable project playbooks and adds a local-environment execution layer.
+
+Project workflows live in `.senten/workflows/` as Markdown with front matter plus a `senten-workflow` fenced block. Senten discovers them automatically, so teams can copy/edit workflows directly in VS Code without registering them through the CLI.
+
+```bash
+senten workflow list
+senten workflow templates
+senten workflow create my-quality --from quality
+senten workflow validate my-quality
+senten workflow plan my-quality
+senten workflow run my-quality
+senten workflow doctor
+senten workflow diff quality
+senten workflow reset --dry-run
+senten workflow reset
+```
+
+Built-in starter workflows include `smoke`, `quality`, `release-check`, `architecture-check`, `security-context`, and `full-assurance`. `workflow reset` restores only official boilerplates, backs up modified built-ins, and never changes custom workflows. Destructive operations require an interactive `[y/N]` confirmation unless `--yes` is explicitly supplied for automation; `--dry-run` previews where supported.
+
+Senten can now inspect the local toolchain without installing project dependencies:
+
+```bash
+senten environment
+senten environment --json
+senten plan run test
+senten run test
+senten run build --dry-run
+senten native node --version
+```
+
+Universal `senten run` operations resolve project-native commands from package scripts and known framework conventions rather than reimplementing npm, pnpm, Laravel, Rails, Django, or other ecosystems.
+
+Local adapters can be scaffolded and progressively deepened:
+
+```bash
+senten adapter create acme
+senten adapter validate acme
+senten adapter enable acme
+senten adapter list
+```
+
+Adapter execution is explicit because local adapters can run code during discovery. Enabled local adapters can contribute source-analysis evidence and can declare namespaced native commands in `senten.adapter.json`. Project workflow resolution is `project -> user -> built-in`.
+
+Warm discovery now caches the semantic graph using source/workspace/framework/adapter fingerprints and the graph builder uses set-based identity tracking instead of repeated linear lookups. This substantially reduces redundant graph work on unchanged repositories while preserving phase-level progress and evidence.
+
+Workflow scope can also be user-global:
+
+```bash
+senten workflow create my-standard --from quality --global
+```
+
+Workflow resolution is deterministic: project-local first, then user-global, then canonical built-ins. Adapter authors can run `senten adapter test <name>` for basic conformance/determinism checks before enabling an adapter.
+
+## Layered scopes and explicit invocation
+
+Senten resolves developer resources predictably across `workspace → project → global → built-in` scope. Use `senten scope` to inspect active locations, `senten resolve workflow quality --all` to see all definitions, and `senten call workflow quality --global` (or `-g`) to deliberately invoke a shadowed global workflow from inside a project.
+
+Project workflows live in `.senten/workflows/`; global workflows live in `~/.senten/workflows/`; optional workspace-specific workflows live in `.senten/workspaces/<name>/workflows/`. Adapters use the same project/global principle with explicit trust before executable adapter code is enabled. `senten config effective` explains layered settings and their sources.
+
+## RC16: actor-aware activity and recoverable checkpoints
+
+Senten keeps project history local and intentionally avoids invasive telemetry. `senten whoami` reports the active Senten profile when one is set, the operating-system account used as fallback attribution, the machine hostname, and whether the session appears local, SSH, or RDP. Senten does not collect IP addresses or geolocation for this feature.
+
+Canonical project-history commands include:
+
+```sh
+senten user create errol
+senten user use errol
+senten whoami
+
+senten activity --last 2h
+senten activity --today
+senten activity export --yesterday
+senten activity export --last 5h --user errol --format md
+
+senten listen
+senten listen apps
+senten listen apps/studio
+senten listen --all
+
+senten checkpoint create before-refactor
+senten checkpoint list
+senten checkpoint show before-refactor
+senten checkpoint diff before-refactor
+senten checkpoint restore before-refactor --dry-run
+senten checkpoint restore before-refactor
+senten checkpoint doctor
+```
+
+`senten listen` is recursive by default and uses Senten's normal generated/vendor exclusions. `--all` includes normally excluded content. File change events are journaled under `.senten/activity/`, and the next ordinary Senten command can surface that changes occurred since the previous Senten command.
+
+Physical checkpoints are stored under `.senten/checkpoints/`. Standard checkpoints exclude regenerable directories such as `.git`, `node_modules`, build outputs, caches, coverage, and prior checkpoints. Restores require confirmation unless `--yes` is supplied and create a pre-restore recovery checkpoint before changing project files.
+
+Senten's canonical CLI grammar is:
+
+```text
+senten <domain> <action> [target] [options]
+```
+
+Convenience verbs such as `senten create checkpoint` remain available, but documentation, automation, and reports use subsystem-first commands such as `senten checkpoint create` and `senten activity export`.
+
+## Version-aware project initialization
+
+`senten init` is idempotent. On an existing Senten project it reconciles the project with the current safe baseline instead of reinstalling or replacing user-owned state.
+
+```bash
+senten init --check   # preview missing/outdated baseline assets; changes nothing
+senten init           # show the reconciliation plan and apply safe additive changes after confirmation
+senten init --repair  # safe repair/reconciliation mode for damaged Senten-managed baseline state
+```
+
+Fresh projects receive human-readable starter workflows under `.senten/workflows/`. Existing custom workflows and locally modified boilerplates are preserved. Use `senten workflow diff <name>` to review a modified boilerplate and `senten workflow reset <name>` when you intentionally want the canonical Senten copy restored.
+
+Workflow scope is explicit:
+
+```bash
+senten workflow list              # effective workflows grouped by scope
+senten workflow list --project    # only repository-owned workflows
+senten workflow list --global     # only user-global workflows
+senten workflow list --builtin    # canonical Senten distribution workflows
+senten workflow list --all        # all definitions, including shadowed copies and source paths
+```
+
+## Senten v1: tools, adapters, and AI context
+
+Senten is designed to work with the frameworks and tools already present in a project rather than replace them.
+
+```bash
+senten tool discover
+senten use tool docker
+senten use docker compose up
+senten use git status
+```
+
+Tools provide operational capability. Adapters add semantic understanding:
+
+```bash
+senten adapter create vue-mobile-apps
+senten adapter validate vue-mobile-apps
+senten adapter doctor vue-mobile-apps
+senten use adapter vue-mobile-apps
+```
+
+LLMs and agents can request compact, model-agnostic project context without requiring Senten to call a hosted AI provider:
+
+```bash
+senten ask project
+senten ask project frameworks
+senten ask project --format json
+senten ask project --budget 4000
+```
+
+Senten remains offline-capable. `senten ask` assembles context from Senten's local application model and excludes credentials and protected internal state by default.
+
+Security authority remains human-owned:
+
+```bash
+senten security passphrase set
+senten security mode secure
+senten security unlock workflows --ttl 15m
+senten ai permissions
+senten ai grant read --scope "src/**" --ttl 30m
+```
+
+Human security leases are temporary and non-delegable. AI capabilities are independent of human unlock state, and destructive operations remain gated.
+
+
+## AI, MCP, and provider-neutral context
+
+Senten remains useful without any AI model. `senten ask` assembles deterministic project context from Senten's own model.
+
+```bash
+senten ask project architecture
+senten ask project --format json --budget 4000
+```
+
+Discover local providers without uploading project data:
+
+```bash
+senten ai discover
+senten ai models ollama
+senten ai use ollama <model>
+```
+
+Any OpenAI-compatible endpoint can be registered without hard-coding a vendor into Senten Core:
+
+```bash
+senten ai provider add internal-ai --endpoint http://127.0.0.1:9000/v1 --protocol openai-compatible
+senten ai use internal-ai <model>
+senten ai ask "Explain this architecture"
+```
+
+Hosted credentials should be supplied through an environment variable reference using `--api-key-env`; Senten does not persist the plaintext key in project configuration. MCP clients can consume Senten context through `senten mcp serve`; AI-facing `ask` requests still pass through Senten's disclosure policy.

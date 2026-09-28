@@ -5,15 +5,26 @@ import { readFile } from 'node:fs/promises';
 const read=(p:string)=>readFile(p,'utf8');
 
 test('root package is publishable and keeps source-intelligence runtime dependency', async()=>{
-  const pkg=JSON.parse(await read('package.json')) as {private?:boolean;version:string;files?:string[];dependencies?:Record<string,string>;publishConfig?:{tag?:string}};
+  const pkg=JSON.parse(await read('package.json')) as {
+  private?:boolean;
+  version:string;
+  files?:string[];
+  dependencies?:Record<string,string>;
+  publishConfig?:{
+    tag?:string;
+    access?:string;
+  };
+};
   assert.notEqual(pkg.private,true);
-  assert.equal(pkg.version,'1.0.0-rc.8');
+  assert.equal(pkg.version,'1.0.0');
+  assert.equal(pkg.publishConfig?.access,'public');
+  assert.equal(pkg.publishConfig?.tag,undefined);
   assert.ok(pkg.files?.includes('dist/packages/'));
   assert.ok(pkg.files?.includes('dist/adapters/'));
   assert.ok(pkg.files?.includes('dist/integrations/'));
   assert.ok(!pkg.files?.includes('dist/')); // keep tests and unrelated build output out of npm
   assert.equal(pkg.dependencies?.typescript,'5.8.3');
-  assert.equal(pkg.publishConfig?.tag,'rc');
+  
 });
 
 test('cross-platform CI names all three desktop operating systems', async()=>{

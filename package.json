@@ -1,6 +1,6 @@
 {
   "name": "senten",
-  "version": "1.0.0-rc.8",
+  "version": "1.0.0",
   "private": false,
   "description": "Semantic application architecture for secure, explainable, cross-platform living software.",
   "license": "Apache-2.0",
@@ -63,8 +63,8 @@
   },
   "homepage": "https://github.com/thomasdscx/senten#readme",
   "publishConfig": {
-    "access": "public",
-    "tag": "rc"
+    "access": "public"
+    
   },
   "dependencies": {
     "typescript": "5.8.3"

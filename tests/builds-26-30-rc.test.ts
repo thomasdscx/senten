@@ -97,12 +97,19 @@ test('Build 30 RC compatibility contract exposes frozen candidate protocol ident
   assert.equal(report.contracts.registryProtocol,'1.0-rc1');
 });
 
-test('Build 30 root package is release candidate and publishes under rc tag',async()=>{
-  const pkg=JSON.parse(await readFile('package.json','utf8')) as {version:string;publishConfig?:{tag?:string}};
-  assert.equal(pkg.version,'1.0.0-rc.8');
-  assert.equal(pkg.publishConfig?.tag,'rc');
-});
+test('Build 30 root package is stable and publishes publicly',async()=>{
+  const pkg=JSON.parse(await readFile('package.json','utf8')) as {
+    version:string;
+    publishConfig?:{
+      tag?:string;
+      access?:string;
+    };
+  };
 
+  assert.equal(pkg.version,'1.0.0');
+  assert.equal(pkg.publishConfig?.access,'public');
+  assert.equal(pkg.publishConfig?.tag,undefined);
+});
 
 test('Build 30 compatibility CLI reports the migration-managed SQLite schema version',async()=>{
   const cwd=await mkdtemp(join(tmpdir(),'senten-rc-compat-cli-'));
@@ -124,8 +131,12 @@ test('Build 30 doctor exposes stale CLI versus Senten repository version mismatc
     run=spawnSync(process.execPath,[entry,'doctor','--json'],{cwd,encoding:'utf8'});
     const report=JSON.parse(run.stdout) as {version:string;checks:Array<{name:string;ok:boolean;detail:string}>};
     const alignment=report.checks.find(c=>c.name==='CLI/source version alignment');
-    assert.equal(report.version,'1.0.0-rc.8');
+    const rootPkg=JSON.parse(await readFile('package.json','utf8')) as {version:string};
+    assert.equal(report.version,rootPkg.version); 
     assert.equal(alignment?.ok,false);
-    assert.match(alignment?.detail??'',/running 1\.0\.0-rc\.8; repository package\.json is 9\.9\.9/);
+    assert.match(
+  alignment?.detail??'',
+  new RegExp(`running ${rootPkg.version.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}; repository package\\.json is 9\\.9\\.9`)
+);
   }finally{await cleanup(cwd);}
 });

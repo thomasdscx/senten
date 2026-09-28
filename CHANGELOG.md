@@ -1,3 +1,161 @@
+## 1.0.0-rc.26
+
+- Security continuity: passphrase change requires current credential; fresh init cannot bypass registered secured-project identity.
+- Five-attempt passphrase policy with recovery-required transition and persistent attempt counter.
+- One-time recovery key, recovery rotation, and recovery-based passphrase reset with no universal backdoor.
+- AES-256-GCM protected-state vault for StateTruss, local SQLite state, activity, reports, checkpoints, workflows, and AI provider metadata.
+- Security doctor and explicit destructive reset semantics.
+
+# Changelog
+
+## 1.0.0-rc.25
+
+- Security hotfix: interactive Senten passphrase entry is now masked with `*` characters instead of being echoed in plaintext.
+- Preserves TTY-only human authorization, scrypt-based salted passphrase verification, temporary non-delegable leases, and AI/security policy boundaries from RC24.
+
+## 1.0.0-rc.24
+
+### Provider-neutral AI onboarding and governed interoperability
+
+- Added `senten ai discover|list|status|inspect|models|use` for local/provider discovery and selection.
+- Added zero-router local discovery for Ollama and LM Studio plus generic OpenAI-compatible provider registration.
+- Added `senten ai ask` using Senten-built, policy-filtered project context and the active provider/model.
+- Added a public provider contract surface under `dist/packages/ai-provider`. Provider credentials are referenced through environment variable names; plaintext API keys are not written to project config.
+- MCP now exposes `ask`, `status`, `capabilities`, and `environment` as read-only surfaces; MCP `ask` automatically applies AI disclosure policy.
+- Added `DENIED` command outcomes for successful security-policy enforcement instead of misclassifying authorization denials as runtime failures.
+- Improved interactive passphrase setup with retry guidance while preserving TTY-only human authorization.
+- Preserved model-independent `senten ask` as deterministic project-context retrieval.
+
+### Release boundary
+
+RC24 remains a packaged-runtime release candidate. Stable 1.0 still requires canonical TypeScript source reconciliation, source/package parity, publish hygiene, and final cross-platform verification before npm publication.
+
+## 1.0.0-rc.22
+
+- Added contextual command help and native-operation aliases (`senten build`, `senten test`, `senten lint`, `senten typecheck`, `senten dev`, `senten format`).
+- Added Listen filesystem-event evidence to detailed reports with bounded Markdown output and complete JSON retention.
+- Unified command outcome classification between reports and activity, including `INVALID_COMMAND` for exit code 2.
+- Preserved `create --from` as the canonical source-derived creation primitive.
+
+# Changelog
+
+## 1.0.0-rc.21
+
+- Fixed Windows `.cmd`/`.bat` invocation by centralizing a single `cmd.exe /d /s /c call ...` quoting layer.
+- Unified tool version probing with the same Windows shim invocation used by runtime execution.
+- Kept direct execution for `.exe`/`.com` tools; routine `shell: true` remains disabled.
+- Listen now suppresses Senten-generated runtime/state writes while continuing to observe user-editable workflows, adapters, policies, templates, profiles, workspaces, and settings.
+- Listen coalesces unambiguous same-directory Windows rename pairs into `RENAME old -> new` activity events and preserves add/delete when uncertain.
+- Activity text and Markdown exports now render rename provenance.
+
+## 1.0.0-rc.20
+
+- Unified tool resolution across environment, plan, run, native and adapter execution.
+- Added Windows PATH/PATHEXT resolution for `.cmd`, `.exe`, `.bat`, and `.com` launchers without restoring Node `shell: true`.
+- Project-local executables remain preferred over system tools.
+- `senten plan run` now displays tool version, scope, executable path, resolution source, and execution mode.
+- Native execution telemetry records the exact resolved executable and provenance.
+- Tool-resolution failures are distinguished from downstream project/native-tool failures.
+
+# Senten 1.0.0-rc.19
+
+- Workflow diff now shows canonical/local hashes, modification time, line counts, and a bounded unified diff using the same comparison semantics as reset.
+- Interactive confirmation wait is separated from actual execution time in reports.
+- Added UNAVAILABLE and SKIPPED evidence statuses so absent optional operations do not fail a session.
+- Project command planning suggests related scripts when no canonical root operation exists.
+- Native process execution no longer uses Node shell:true; Windows command shims use an explicit wrapper and reports capture bounded stdout/stderr plus failure classification.
+- Every command record captures its Senten version and CLI executable, preserving provenance across upgrades during a long recording.
+
+# Changelog
+
+## 1.0.0-rc.18
+
+- Clarify workflow ownership in CLI output: project boilerplates, project custom workflows, global custom workflows, and built-in canonical recovery definitions.
+- `senten workflow list` groups effective workflows by ownership instead of presenting all project files as one undifferentiated group.
+- `senten workflow list --all` labels provenance with explicit ownership classes while preserving ACTIVE/shadowed resolution status.
+- `senten workflow inspect` reports the resolved workflow ownership kind.
+- Preserve RC17 version-aware additive `senten init` reconciliation and canonical built-in recovery semantics.
+
+## 1.0.0-rc.15
+
+- Added layered Senten scopes: built-in, global/user, project, workspace, and command/session overrides.
+- Added `senten scope`, `senten resolve`, `senten call`, and layered `senten config` commands.
+- Added explicit workflow scope selection (`--global/-g`, `--project/-p`, `--builtin/-b`, `--workspace/-w`) plus `workflow list --all`.
+- Added workflow copying across scopes with provenance metadata.
+- Added global adapter directories, scoped adapter resolution, and explicit global adapter trust/enablement.
+- Added effective configuration provenance and scoped settings files without changing canonical project architecture state.
+- Preserved safe-by-default destructive confirmations and explicit trust gates.
+
+# 1.0.0-rc.14
+
+- Converted project workflows to human-editable Markdown-first files under `.senten/workflows/` while preserving JSON compatibility.
+- Added built-in starter workflows: smoke, quality, release-check, architecture-check, security-context, and full-assurance.
+- Added workflow templates, project/user/built-in resolution, direct file auto-discovery, validation, doctor, diff, planning, reset, backup/recovery, and safe removal behavior.
+- `senten workflow reset` restores canonical boilerplates, preserves custom workflows, creates recovery backups, supports `--dry-run`, and requires `[y/N]` confirmation unless `--yes` is explicit.
+- Added universal destructive-operation confirmation to workflow mutation, cache clear, lifecycle remove/purge/reset, finding clear, file deletion, sandbox destruction, and local-adapter enablement.
+- Added `senten environment` for local runtime/tool/package-manager/version awareness without dependency installation.
+- Added `senten run` and `senten plan run` to resolve project-native build/test/dev/lint/typecheck/format commands instead of reimplementing ecosystem CLIs.
+- Added `senten native` for explicit local/native tool execution with visible resolution/version information.
+- Added local adapter scaffolding/validation/conformance testing/enablement plus explicit trusted execution and namespaced native command declarations.
+- Added local adapter source analyzers to discovery after explicit enablement; local adapter commands appear in `senten commands`.
+- Added workflow source/hash provenance to workflow run records and project → user → built-in workflow resolution.
+- Added StateTruss v1-RC runtime contract metadata, evidence-status/confidence helpers, snapshots, and semantic delta foundations.
+- Added semantic graph cache keyed by source/workspace/framework/adapter fingerprints and optimized graph construction with set-based node/edge identity.
+- Added granular semantic-graph progress events while indexing entities and resolving dependency relationships.
+
+# 1.0.0-rc.13
+
+- Discovery progress now represents the full command lifecycle instead of showing 100% when only the semantic graph phase is complete.
+- Added explicit multi-phase progress for workspace detection, framework detection, repository inventory, cache/parsing, semantic graph, discovery manifest, StateTruss persistence, state metadata, and finalization.
+- Large repositories (5,000+ modeled source files) now receive a clear notice that full discovery may take several minutes while live progress remains visible.
+- Added phase-level timing evidence to discovery stats and detailed Markdown reports.
+- Added unchanged-StateTruss reuse: when the newly discovered IR is semantically identical to the persisted IR, Senten skips rewriting the large StateTruss file and records graph reuse.
+- Detailed reports now distinguish detected, modeled, and detection-only framework understanding.
+- Security report language now distinguishes architectural security context from modeled authentication/authorization controls and imported scanner findings.
+- Warm-discovery evidence now records graph reuse and phase timings so redundant work can be diagnosed and compared across reports.
+
+# 1.0.0-rc.12
+
+- Detailed immutable report sessions by default; `senten report start --short` retains the compact view.
+- Every stopped session writes a unique timestamped JSON + Markdown pair without replacing historical reports.
+- Detailed Markdown now includes record identity, environment/Git metadata, chronological command timestamps, per-command status/exit/duration, command-specific discovery/adoption/security/release evidence, final snapshots, and failure/interruption evidence.
+- Added `senten report show`, `senten report compare`, `senten report export`, and safe `senten report prune` with dry-run-by-default retention cleanup.
+- Report comparison surfaces readiness, semantic/operational coverage, discovery/cache performance, graph size, findings, and framework changes.
+- Session record schema upgraded to v2 and captures lightweight command-result snapshots for later audit/comparison.
+
+# Changelog
+
+## 1.0.0-rc.11
+
+- Added interactive discovery progress with phase, elapsed time, cache metrics, large-repository notice, and safe Ctrl+C cancellation.
+- Added optional `--timeout`, `--stall-timeout`, and `--stall-warn` controls for discovery and adoption.
+- Preserved completed file-cache objects after cancellation/timeouts so subsequent discovery reuses completed work.
+- Session reports now distinguish CANCELLED/TIMED OUT/STALLED from failures and export richer discovery, capability, security, adoption, and release-check evidence.
+- Added auto-named `senten report start` / `senten report stop` aliases.
+- Expanded detection-level capability boundaries for Nuxt, NestJS, Python/Django/FastAPI, PHP/Laravel, and Ruby/Rails.
+- Expanded default generated/cache directory exclusions for large repositories.
+- Persist release-check details for report diagnosis.
+
+# 1.0.0-rc.10 — Machine Contracts, Findings Interchange & Security Context
+
+- Added `senten contract` with explicit machine-interface schema/version metadata and stable exit-code semantics for integrations and agents.
+- Added normalized finding interchange (`senten.finding.v1`) with SARIF/JSON import, listing, inspection, filtering, clearing, and StateTruss attachment.
+- Added first-class semantic `finding:*` nodes and `affects` edges so imported scanner results participate in `senten impact` blast-radius analysis.
+- Added `senten security status|surface|boundaries|exposure` as architecture security context, deliberately separated from vulnerability scanning.
+- Added `senten.security-context.v1` structured JSON output with explicit limitations: unknown never means safe/public.
+- Added `senten report security` and `senten report findings` JSON/Markdown evidence exports.
+- Kept security providers vendor-neutral so Opengrep/Semgrep/Aikido/CodeQL/Trivy/OSV/Gitleaks/ZAP/Astra-style integrations can normalize into the same finding contract.
+- Preserved RC9 mixed-language truthfulness and lifecycle/reporting hardening.
+
+# 1.0.0-rc.9
+
+- Hardened framework detection with multi-file corroboration to reduce false positives.
+- Added repository-wide source inventory and truthful modeled/unsupported coverage.
+- Added Rails/Ruby detection-level intelligence and dependency-backed security signals.
+- Added `senten capabilities`, `senten status`, `senten remove`, `senten purge`, and `senten reset`.
+- Added `senten report session` aliases around dogfood recording/export.
+- Preserved idempotent initialization and existing safe redo-all semantics.
+
 # 1.0.0-rc.8 — Remote Repository & Secure Learning Candidate
 
 - Added provider-neutral remote repository foundation with first-party GitHub read support.
@@ -265,3 +423,55 @@ Windows acceptance hardening patch.
 - Added the controlled Scenario Lab corpus and `senten scenario` verification/export commands.
 - Added `senten showcase build` and a static interactive showcase that renders real precomputed Senten analysis without executing visitor repositories.
 - Added regression coverage for architecture manifests, scenario verification, showcase artifact generation, and ignore boundaries.
+
+## 1.0.0-rc.16
+
+### Actor awareness, activity, listen, and physical checkpoints
+
+- Added optional local Senten user profiles with `senten user` and `senten whoami`.
+- Reports now record execution identity provenance, machine label, local/remote session kind, and explicitly exclude IP/geolocation collection.
+- Added project activity journal and canonical `senten activity export ...` syntax with time/user filters.
+- Added `senten listen [path]` foreground recursive filesystem monitoring with add/modify/delete journaling and change summaries before the next Senten command.
+- Reworked checkpoints into verified project-state copies under `.senten/checkpoints/` with create/list/show/diff/restore/rename/remove/doctor commands.
+- Checkpoint restore is destructive-gated, creates a recovery checkpoint first, and shows restore progress.
+- Added canonical `senten create checkpoint [name]` convenience alias while retaining `senten checkpoint create [name]` as the documented subsystem form.
+- Expanded CLI grammar consistency around `senten <domain> <action> [target] [options]`.
+
+## 1.0.0-rc.17
+
+### Workspace reconciliation and workflow scope clarity
+
+- Reworked `senten init` into an idempotent workspace reconciliation entry point for existing projects.
+- Added `.senten/workspace.json` baseline metadata with initialized/reconciled Senten versions, workspace schema, and boilerplate version.
+- Added `senten init --check` for non-mutating baseline inspection; returns a non-zero status when reconciliation is required.
+- Existing projects now receive missing Senten-managed directories and missing project boilerplate workflows without overwriting modified or custom workflows.
+- Locally modified boilerplates are preserved during `init` and surfaced with explicit `workflow diff` / `workflow reset` guidance.
+- Fresh projects materialize the six starter workflows into `.senten/workflows/` and record their baseline.
+- `senten status` now reports whether the workspace baseline is current or reconciliation is available.
+- `senten workflow list` now groups effective workflows by Workspace / Project / Global / Built-in scope.
+- Added scope-specific workflow listing with `--project`, `--global`, `--builtin`, and `--workspace <name>`; `--all` now marks definitions as ACTIVE or shadowed.
+- Removed Node's `shell: true` version-probing path from environment detection to avoid DEP0190 argument-escaping warnings on Windows.
+
+### Safety model
+
+`senten init` treats missing baseline assets as additive reconciliation. It never overwrites user-owned/custom workflows. Modified boilerplates require the explicit destructive `senten workflow reset` path, which retains the existing backup-and-confirmation behavior.
+
+## 1.0.0-rc.23
+
+### Tool Fabric, AI context, adapter contract, and security capabilities
+
+- Added the v1 Tool Fabric surface: `senten tool discover|list|inspect|resolve|register|doctor|run`.
+- Added explicit tool activation with `senten use tool <name>` plus ergonomic invocation through `senten use <tool> <args...>`.
+- Tool resolution remains project-local/registered/PATH based; Senten does not vendor or pin third-party CLIs.
+- Added conservative high-risk classification for selected destructive Git/Docker/tool operations before execution.
+- Added `senten ask ...` as an offline-first Markdown/JSON context interface for LLMs and agents, including optional context budgets and `--for-ai` policy checks.
+- Added project AI capability policy commands: `senten ai permissions|grant|revoke`. AI-sensitive context is denied by default unless explicitly granted.
+- Added security modes, lock state, TTY-only passphrase setup/unlock, scrypt-backed passphrase verification, temporary non-delegable capability leases, and secure-mode requirements.
+- Expanded adapter manifests with explicit `namespace` and Senten compatibility range; validation rejects core namespace collisions.
+- Added `senten adapter doctor` and `senten use adapter <name>` activation.
+- Expanded the public extension SDK with Tool and Context provider contracts.
+- Refined Windows `.cmd`/`.bat` invocation so quoting is owned by one final serialization layer using `windowsVerbatimArguments`.
+
+### V1 boundary
+
+RC23 intentionally does not implement OS-level ACL or filesystem encryption. Senten-governed AI/tool access is policy controlled; an external process already granted unrestricted OS permissions can bypass application-level controls. OS-level isolation, enterprise IAM, encrypted state vaults, and stronger platform-native authentication remain candidates for v1.1+.
